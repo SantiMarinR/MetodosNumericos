@@ -1166,12 +1166,10 @@ class App(ctk.CTk):
         datos_intervalo.grid_columnconfigure(0, weight=1)
         datos_intervalo.grid_columnconfigure(1, weight=1)
         datos_intervalo.grid_columnconfigure(2, weight=1)
-        datos_intervalo.grid_columnconfigure(3, weight=1)
 
         self.bis_a = self.crear_input_biseccion_chico(datos_intervalo, 0, "Límite a", "1")
         self.bis_b = self.crear_input_biseccion_chico(datos_intervalo, 1, "Límite b", "2")
         self.bis_error = self.crear_input_biseccion_chico(datos_intervalo, 2, "Error máximo", "0.001")
-        self.bis_iteraciones = self.crear_input_biseccion_chico(datos_intervalo, 3, "Iteraciones", "10")
 
         ctk.CTkButton(
             panel_entrada,
@@ -1362,11 +1360,19 @@ class App(ctk.CTk):
         except Exception:
             return str(valor)
 
+    def leer_numero_biseccion(self, entrada):
+        texto = entrada.get().strip()
+
+        if hasattr(self.metodo_actual, "convertir_numero"):
+            return self.metodo_actual.convertir_numero(texto)
+
+        return float(texto)
+
     def graficar_biseccion_desde_formulario(self):
         try:
             expresion = self.bis_funcion.get()
-            a = float(self.bis_a.get())
-            b = float(self.bis_b.get())
+            a = self.leer_numero_biseccion(self.bis_a)
+            b = self.leer_numero_biseccion(self.bis_b)
 
             _, _, f_numpy = self.metodo_actual.obtener_funciones(expresion)
 
@@ -1386,7 +1392,6 @@ class App(ctk.CTk):
                 a=self.bis_a.get(),
                 b=self.bis_b.get(),
                 tolerancia=self.bis_error.get(),
-                max_iteraciones=self.bis_iteraciones.get(),
             )
 
             self.dibujar_grafica_biseccion(
@@ -1404,86 +1409,144 @@ class App(ctk.CTk):
     def dibujar_grafica_biseccion(self, funcion_numpy, a, b, c=None):
         self.limpiar_grafica_biseccion()
 
-        margen = abs(b - a) * 0.35
-        if margen == 0:
-            margen = 1
+        a = float(a)
+        b = float(b)
 
-        x_min = a - margen
-        x_max = b + margen
+        x_izquierda = min(a, b)
+        x_derecha = max(a, b)
+        ancho = x_derecha - x_izquierda
 
-        xs = np.linspace(x_min, x_max, 500)
+        if ancho <= 0:
+            ancho = 1.0
 
-        try:
-            ys = funcion_numpy(xs)
-        except Exception:
-            ys = np.array([funcion_numpy(float(x)) for x in xs])
+        # Vista enfocada en el intervalo. 
+        # Para intervalos muy pequeños no se abre hasta 0, se mantiene cerca de [a,b].
+        margen_x = max(ancho * 0.18, ancho * 0.18)
+        x_min = x_izquierda - margen_x
+        x_max = x_derecha + margen_x
+
+        xs = np.linspace(x_min, x_max, 900)
+
+        with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+            try:
+                ys = funcion_numpy(xs)
+            except Exception:
+                ys = np.array([funcion_numpy(float(valor_x)) for valor_x in xs])
 
         ys = np.array(ys, dtype=float)
 
         mascara = np.isfinite(ys)
-        xs = xs[mascara]
-        ys = ys[mascara]
+        xs_validos = xs[mascara]
+        ys_validos = ys[mascara]
 
-        figura = Figure(figsize=(6.2, 3.4), dpi=100)
+        if len(xs_validos) == 0:
+            self.mostrar_error_biseccion("No se pudo graficar la función en ese intervalo.")
+            return
+
+        # Escala de Y robusta para que no se aplaste por valores extremos.
+        valores_y = list(ys_validos)
+
+        for punto in [a, b, c]:
+            if punto is not None:
+                try:
+                    valor_y = float(funcion_numpy(float(punto)))
+                    if np.isfinite(valor_y):
+                        valores_y.append(valor_y)
+                except Exception:
+                    pass
+
+        valores_y = np.array(valores_y, dtype=float)
+        valores_y = valores_y[np.isfinite(valores_y)]
+
+        if len(valores_y) == 0:
+            y_min, y_max = -1, 1
+        else:
+            y_min = float(np.min(valores_y))
+            y_max = float(np.max(valores_y))
+
+        if y_min == y_max:
+            y_min -= 1
+            y_max += 1
+
+        margen_y = abs(y_max - y_min) * 0.20
+        y_min -= margen_y
+        y_max += margen_y
+
+        figura = Figure(figsize=(7.6, 3.9), dpi=100)
         figura.patch.set_facecolor("#151a22")
 
         eje = figura.add_subplot(111)
         eje.set_facecolor("#101216")
 
-        eje.plot(xs, ys, linewidth=2, color="#7cc7ff", label="f(x)")
-        eje.axhline(0, color="#ffffff", linewidth=1, alpha=0.6)
-        eje.axvline(0, color="#ffffff", linewidth=1, alpha=0.25)
-
-        fa = funcion_numpy(a)
-        fb = funcion_numpy(b)
-
-        eje.scatter([a], [fa], color="#ef4444", s=60, label="a")
-        eje.scatter([b], [fb], color="#f28c28", s=60, label="b")
-
-        eje.annotate(
-            "a",
-            (a, fa),
-            textcoords="offset points",
-            xytext=(0, 10),
-            ha="center",
-            color="#ef4444",
-            fontsize=11,
-            fontweight="bold",
+        eje.plot(
+            xs_validos,
+            ys_validos,
+            linewidth=2,
+            color="#7cc7ff",
+            label="f(x)"
         )
 
-        eje.annotate(
-            "b",
-            (b, fb),
-            textcoords="offset points",
-            xytext=(0, 10),
-            ha="center",
-            color="#f28c28",
-            fontsize=11,
-            fontweight="bold",
-        )
+        eje.axhline(0, color="#ffffff", linewidth=1, alpha=0.75)
+
+        # Solo dibujamos eje y si cae dentro de la vista.
+        if x_min <= 0 <= x_max:
+            eje.axvline(0, color="#ffffff", linewidth=1, alpha=0.25)
+
+        def marcar_punto(x_punto, color, etiqueta):
+            try:
+                y_punto = float(funcion_numpy(float(x_punto)))
+
+                if not np.isfinite(y_punto):
+                    return
+
+                eje.scatter(
+                    [x_punto],
+                    [y_punto],
+                    color=color,
+                    s=80,
+                    label=etiqueta,
+                    zorder=6,
+                )
+
+                eje.annotate(
+                    etiqueta,
+                    (x_punto, y_punto),
+                    textcoords="offset points",
+                    xytext=(0, 10),
+                    ha="center",
+                    color=color,
+                    fontsize=12,
+                    fontweight="bold",
+                )
+
+                eje.axvline(x_punto, color=color, linewidth=1, alpha=0.35)
+
+            except Exception:
+                pass
+
+        marcar_punto(a, "#ef4444", "a")
+        marcar_punto(b, "#f28c28", "b")
 
         if c is not None:
-            fc = funcion_numpy(c)
-            eje.scatter([c], [fc], color="#22c55e", s=70, label="c")
-            eje.annotate(
-                "c",
-                (c, fc),
-                textcoords="offset points",
-                xytext=(0, 10),
-                ha="center",
-                color="#22c55e",
-                fontsize=11,
-                fontweight="bold",
-            )
+            marcar_punto(float(c), "#22c55e", "c")
+
+        eje.set_xlim(x_min, x_max)
+        eje.set_ylim(y_min, y_max)
+
+        # Ticks centrados en el intervalo para que no aparezca la escala desde 0.
+        ticks_x = np.linspace(x_min, x_max, 6)
+        eje.set_xticks(ticks_x)
+        eje.set_xticklabels([f"{valor:.5f}" for valor in ticks_x])
 
         eje.grid(True, alpha=0.25)
         eje.tick_params(colors="#dbeafe")
+
         eje.spines["bottom"].set_color("#64748b")
         eje.spines["top"].set_color("#64748b")
         eje.spines["left"].set_color("#64748b")
         eje.spines["right"].set_color("#64748b")
 
-        eje.set_title("Gráfica de la función", color="#ffffff", fontsize=12, fontweight="bold")
+        eje.set_title("Gráfica de la función", color="#ffffff", fontsize=13, fontweight="bold")
         eje.set_xlabel("x", color="#dbeafe")
         eje.set_ylabel("f(x)", color="#dbeafe")
 
@@ -1491,6 +1554,7 @@ class App(ctk.CTk):
         if leyenda:
             leyenda.get_frame().set_facecolor("#151a22")
             leyenda.get_frame().set_edgecolor("#344054")
+
             for texto in leyenda.get_texts():
                 texto.set_color("#ffffff")
 
@@ -1529,12 +1593,21 @@ class App(ctk.CTk):
             text_color="#9fffe4",
         ).grid(row=1, column=0, padx=16, pady=(0, 6), sticky="w")
 
+        max_iteraciones = datos.get("max_iteraciones_calculadas", len(datos.get("tabla", [])))
+
+        ctk.CTkLabel(
+            tarjeta,
+            text=f"Máximo de iteraciones calculado: {max_iteraciones}",
+            font=("Arial", 13, "bold"),
+            text_color="#ffffff",
+        ).grid(row=2, column=0, padx=16, pady=(0, 4), sticky="w")
+
         ctk.CTkLabel(
             tarjeta,
             text=datos["mensaje"],
             font=("Arial", 13, "bold"),
             text_color="#ffffff",
-        ).grid(row=2, column=0, padx=16, pady=(0, 12), sticky="w")
+        ).grid(row=3, column=0, padx=16, pady=(0, 12), sticky="w")
 
         tabla = ctk.CTkFrame(
             self.bis_tabla_frame,
@@ -1610,6 +1683,7 @@ class App(ctk.CTk):
             wraplength=620,
             justify="left",
         ).grid(row=1, column=0, padx=18, pady=(0, 18), sticky="w")
+
     # =========================================================
     # CALCULO
     # =========================================================

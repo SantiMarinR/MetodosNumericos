@@ -1,6 +1,11 @@
+import re
+import math
+import sympy as sp
+import numpy as np
+
 from core.metodo_base import MetodoNumerico
 from core.resultado import ResultadoMetodo
-from core.funciones import crear_funcion, redondear
+from core.funciones import redondear
 
 
 class Biseccion(MetodoNumerico):
@@ -29,85 +34,332 @@ class Biseccion(MetodoNumerico):
         },
         {
             "nombre": "tolerancia",
-            "label": "Tolerancia",
+            "label": "Error máximo permitido",
             "tipo": "number",
-            "placeholder": "0.0001"
+            "placeholder": "0.001"
         },
         {
             "nombre": "max_iteraciones",
-            "label": "Máximo de iteraciones",
+            "label": "Número máximo de iteraciones",
             "tipo": "number",
-            "placeholder": "100"
+            "placeholder": "Se calcula automáticamente"
         },
     ]
 
-    def ejecutar(self, **kwargs):
-        expresion = kwargs.get("funcion")
-        a = float(kwargs.get("a"))
-        b = float(kwargs.get("b"))
-        tolerancia = float(kwargs.get("tolerancia"))
-        max_iteraciones = int(kwargs.get("max_iteraciones"))
+    # =========================================================
+    # CONVERSION DE NUMEROS
+    # =========================================================
 
-        f = crear_funcion(expresion)
+    def convertir_numero(self, texto):
+        """
+        Permite escribir números como:
+        0.001
+        1e-3
+        1x10^-3
+        1*10^-3
+        1×10^-3
+        """
+        texto = str(texto).strip().lower()
+        texto = texto.replace(" ", "")
+        texto = texto.replace(",", ".")
+        texto = texto.replace("×", "x")
 
-        if f(a) * f(b) >= 0:
-            return ResultadoMetodo(
-                resultado=None,
-                mensaje="El intervalo no cumple con cambio de signo. Prueba con otros valores de a y b.",
-                pasos=[
-                    f"f(a) = f({a}) = {redondear(f(a))}",
-                    f"f(b) = f({b}) = {redondear(f(b))}",
-                    "Para usar bisección se necesita que f(a) y f(b) tengan signos opuestos."
-                ],
-                tabla=[]
+        if texto == "":
+            raise ValueError("Falta ingresar un valor numérico.")
+
+        patron_x = r"^([+-]?\d+(\.\d+)?)x10\^([+-]?\d+)$"
+        coincidencia = re.match(patron_x, texto)
+
+        if coincidencia:
+            base = float(coincidencia.group(1))
+            exponente = int(coincidencia.group(3))
+            return base * (10 ** exponente)
+
+        patron_asterisco = r"^([+-]?\d+(\.\d+)?)\*10\^([+-]?\d+)$"
+        coincidencia = re.match(patron_asterisco, texto)
+
+        if coincidencia:
+            base = float(coincidencia.group(1))
+            exponente = int(coincidencia.group(3))
+            return base * (10 ** exponente)
+
+        return float(texto)
+
+    # =========================================================
+    # PREPARACION DE LA FUNCION
+    # =========================================================
+
+    def preparar_expresion(self, expresion):
+        expresion = str(expresion).strip()
+
+        if not expresion:
+            raise ValueError("Escribe una función antes de calcular.")
+
+        expresion = expresion.replace(" ", "")
+        expresion = expresion.replace("^", "**")
+
+        # Permitir sen(x), sin(x), cos(x), tan(x), ln(x), log(x)
+        expresion = expresion.replace("sen", "sin")
+        expresion = expresion.replace("ln", "log")
+
+        # Multiplicaciones implícitas:
+        # 2x -> 2*x
+        # 2cos(x) -> 2*cos(x)
+        # xcos(x) -> x*cos(x)
+        # x(x+1) -> x*(x+1)
+        # )( -> )*(
+        # )cos(x) -> )*cos(x)
+        expresion = re.sub(r"(\d)(x)", r"\1*\2", expresion)
+        expresion = re.sub(r"(\d)(sin|cos|tan|log|exp|sqrt)", r"\1*\2", expresion)
+        expresion = re.sub(r"(x)(sin|cos|tan|log|exp|sqrt)", r"\1*\2", expresion)
+        expresion = re.sub(r"(x)(\()", r"\1*\2", expresion)
+        expresion = re.sub(r"(\))(\()", r"\1*\2", expresion)
+        expresion = re.sub(r"(\))([a-zA-Z])", r"\1*\2", expresion)
+        expresion = re.sub(r"(pi)(x)", r"\1*\2", expresion)
+        expresion = re.sub(r"(e)(x)", r"\1*\2", expresion)
+
+        return expresion
+
+    def obtener_funciones(self, expresion):
+        x = sp.symbols("x")
+        expresion = self.preparar_expresion(expresion)
+
+        locales = {
+            "x": x,
+            "sin": sp.sin,
+            "cos": sp.cos,
+            "tan": sp.tan,
+            "log": sp.log,
+            "ln": sp.log,
+            "exp": sp.exp,
+            "sqrt": sp.sqrt,
+            "pi": sp.pi,
+            "e": sp.E,
+        }
+
+        try:
+            expresion_simbolica = sp.sympify(expresion, locals=locales)
+        except Exception:
+            raise ValueError(
+                "La función no se pudo interpretar. Revisa paréntesis, multiplicaciones y operadores."
+            )
+
+        funcion_math = sp.lambdify(x, expresion_simbolica, "math")
+        funcion_numpy = sp.lambdify(x, expresion_simbolica, "numpy")
+
+        return expresion_simbolica, funcion_math, funcion_numpy
+
+    # =========================================================
+    # UTILIDADES
+    # =========================================================
+
+    def signo_texto(self, valor):
+        if valor > 0:
+            return "(+)"
+        if valor < 0:
+            return "(-)"
+        return "0"
+
+    def calcular_max_iteraciones(self, a, b, tolerancia):
+        """
+        Formula:
+        n = ceil( log((b-a)/error) / log(2) )
+        """
+        longitud = abs(b - a)
+
+        if longitud <= 0:
+            raise ValueError("El intervalo debe tener longitud mayor que cero.")
+
+        if tolerancia <= 0:
+            raise ValueError("El error máximo debe ser mayor que cero.")
+
+        n = math.ceil(math.log(longitud / tolerancia) / math.log(2))
+
+        if n <= 0:
+            n = 1
+
+        return n
+
+    def evaluar_seguro(self, funcion, valor):
+        try:
+            resultado = funcion(valor)
+        except ZeroDivisionError:
+            raise ValueError(
+                f"La función no se puede evaluar en x = {valor} porque hay división entre cero."
+            )
+        except ValueError:
+            raise ValueError(
+                f"La función no se puede evaluar en x = {valor}. Revisa el dominio."
+            )
+        except Exception as error:
+            raise ValueError(
+                f"No se pudo evaluar la función en x = {valor}. Detalle: {error}"
+            )
+
+        if not math.isfinite(resultado):
+            raise ValueError(
+                f"La función no tiene un valor finito en x = {valor}."
+            )
+
+        return resultado
+
+    # =========================================================
+    # CALCULO DETALLADO
+    # =========================================================
+
+    def calcular_detallado(self, funcion, a, b, tolerancia, max_iteraciones=None):
+        expresion_simbolica, f, f_numpy = self.obtener_funciones(funcion)
+
+        a = self.convertir_numero(a)
+        b = self.convertir_numero(b)
+        tolerancia = self.convertir_numero(tolerancia)
+
+        if a >= b:
+            raise ValueError("El valor de a debe ser menor que el valor de b.")
+
+        if tolerancia <= 0:
+            raise ValueError("El error máximo debe ser mayor que cero.")
+
+        # Aunque app.py mande max_iteraciones, aquí se ignora.
+        # Se calcula automáticamente con el error máximo.
+        max_iteraciones_calculadas = self.calcular_max_iteraciones(a, b, tolerancia)
+
+        fa = self.evaluar_seguro(f, a)
+        fb = self.evaluar_seguro(f, b)
+
+        if fa == 0:
+            return {
+                "expresion": str(expresion_simbolica),
+                "raiz": a,
+                "mensaje": "El valor de a ya es una raíz.",
+                "tabla": [],
+                "funcion_numpy": f_numpy,
+                "a_inicial": a,
+                "b_inicial": b,
+                "c_final": a,
+                "max_iteraciones_calculadas": max_iteraciones_calculadas,
+            }
+
+        if fb == 0:
+            return {
+                "expresion": str(expresion_simbolica),
+                "raiz": b,
+                "mensaje": "El valor de b ya es una raíz.",
+                "tabla": [],
+                "funcion_numpy": f_numpy,
+                "a_inicial": a,
+                "b_inicial": b,
+                "c_final": b,
+                "max_iteraciones_calculadas": max_iteraciones_calculadas,
+            }
+
+        if fa * fb > 0:
+            raise ValueError(
+                f"No hay cambio de signo en el intervalo. "
+                f"f({a}) = {redondear(fa)} y f({b}) = {redondear(fb)}. "
+                "Para aplicar bisección, f(a) y f(b) deben tener signos opuestos."
             )
 
         tabla = []
-        pasos = []
-
-        pasos.append("Se verifica que exista cambio de signo en el intervalo.")
-        pasos.append(f"Intervalo inicial: [{a}, {b}]")
-        pasos.append(f"Tolerancia: {tolerancia}")
-
         raiz = None
+        mensaje = "Se alcanzó el máximo de iteraciones calculado."
 
-        for i in range(1, max_iteraciones + 1):
-            c = (a + b) / 2
-            fa = f(a)
-            fb = f(b)
-            fc = f(c)
-            error = abs(b - a) / 2
+        a_actual = a
+        b_actual = b
+
+        for iteracion in range(1, max_iteraciones_calculadas + 1):
+            c = (a_actual + b_actual) / 2
+
+            fa = self.evaluar_seguro(f, a_actual)
+            fb = self.evaluar_seguro(f, b_actual)
+            fc = self.evaluar_seguro(f, c)
+
+            cota_error = abs(b_actual - a_actual) / 2
 
             tabla.append({
-                "Iteración": i,
-                "a": redondear(a),
-                "b": redondear(b),
-                "c": redondear(c),
-                "f(a)": redondear(fa),
-                "f(b)": redondear(fb),
-                "f(c)": redondear(fc),
-                "Error": redondear(error)
+                "n": iteracion,
+                "a": a_actual,
+                "b": b_actual,
+                "c": c,
+                "fa": fa,
+                "fc": fc,
+                "fb": fb,
+                "signo_fa": self.signo_texto(fa),
+                "signo_fc": self.signo_texto(fc),
+                "signo_fb": self.signo_texto(fb),
+                "cota_error": cota_error,
             })
 
-            if abs(fc) < tolerancia or error < tolerancia:
+            if abs(fc) <= tolerancia or cota_error <= tolerancia:
                 raiz = c
-                pasos.append(f"Se detuvo en la iteración {i} porque el error ya es menor que la tolerancia.")
+                mensaje = "Raíz aproximada encontrada dentro del error permitido."
                 break
 
             if fa * fc < 0:
-                b = c
+                b_actual = c
             else:
-                a = c
+                a_actual = c
 
         if raiz is None:
             raiz = c
-            mensaje = "Se alcanzó el máximo de iteraciones."
-        else:
-            mensaje = "Raíz aproximada encontrada correctamente."
+
+        return {
+            "expresion": str(expresion_simbolica),
+            "raiz": raiz,
+            "mensaje": mensaje,
+            "tabla": tabla,
+            "funcion_numpy": f_numpy,
+            "a_inicial": a,
+            "b_inicial": b,
+            "c_final": raiz,
+            "max_iteraciones_calculadas": max_iteraciones_calculadas,
+        }
+
+    # =========================================================
+    # EJECUCION NORMAL
+    # =========================================================
+
+    def ejecutar(self, **kwargs):
+        funcion = kwargs.get("funcion")
+        a = kwargs.get("a")
+        b = kwargs.get("b")
+        tolerancia = kwargs.get("tolerancia")
+
+        datos = self.calcular_detallado(
+            funcion=funcion,
+            a=a,
+            b=b,
+            tolerancia=tolerancia
+        )
+
+        tabla = []
+
+        for fila in datos["tabla"]:
+            tabla.append({
+                "n": fila["n"],
+                "a": redondear(fila["a"]),
+                "b": redondear(fila["b"]),
+                "c=(a+b)/2": redondear(fila["c"]),
+                "f(a)": fila["signo_fa"],
+                "f(c)": fila["signo_fc"],
+                "f(b)": fila["signo_fb"],
+                "Cota del error": redondear(fila["cota_error"]),
+            })
+
+        pasos = [
+            "Se verifica que exista cambio de signo entre a y b.",
+            "Se calcula el máximo de iteraciones con n = ceil(log((b-a)/error) / log(2)).",
+            "Se calcula c = (a + b) / 2.",
+            "Se revisan los signos de f(a), f(c) y f(b).",
+            "Se conserva el intervalo donde existe cambio de signo.",
+        ]
 
         return ResultadoMetodo(
-            resultado=redondear(raiz),
-            mensaje=mensaje,
+            resultado=redondear(datos["raiz"]),
+            mensaje=(
+                f"{datos['mensaje']} "
+                f"Máximo de iteraciones calculado: {datos['max_iteraciones_calculadas']}."
+            ),
             pasos=pasos,
             tabla=tabla
         )
