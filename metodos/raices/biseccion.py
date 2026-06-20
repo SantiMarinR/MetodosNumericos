@@ -4,7 +4,7 @@ from core.funciones import crear_funcion, redondear
 
 
 class Biseccion(MetodoNumerico):
-    nombre = "LOSI PRUEBA"
+    nombre = "Biseccion"
     categoria = "Raíces de ecuaciones"
     descripcion = "Método que aproxima una raíz dividiendo un intervalo [a,b] donde existe cambio de signo."
 
