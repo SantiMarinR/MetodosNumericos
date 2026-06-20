@@ -1,6 +1,7 @@
 import unicodedata
 
 import numpy as np
+import sympy as sp
 import customtkinter as ctk
 
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -37,8 +38,7 @@ CATEGORIAS_UI = [
         "descripcion": "Construcción de polinomios a partir de datos.",
         "metodos": [
             "Lagrange",
-            "Diferencia dividida adelante",
-            "Diferencia dividida atrás",
+            "Diferencias divididas",
             "Neville",
             "Extrapolación",
         ],
@@ -107,6 +107,9 @@ ALIAS_METODOS = {
     "Ajuste logarítmico": "Ajuste logarítmico",
     "Ajuste logaritmico": "Ajuste logarítmico",
 
+    "Diferencias divididas": "Diferencia dividida adelante",
+    "Diferencia dividida": "Diferencia dividida adelante",
+    "Diferencia dividida adelante": "Diferencia dividida adelante",
     "Diferencia dividida atrás": "Diferencia dividida atrás",
     "Diferencia dividida atras": "Diferencia dividida atrás",
 
@@ -180,6 +183,98 @@ class App(ctk.CTk):
             text_color=color,
             justify="left",
         )
+
+
+    # =========================================================
+    # RAICES EXACTAS / SIMBOLICAS
+    # =========================================================
+
+    def obtener_raices_exactas_texto(self, funcion_texto):
+        """
+        Intenta obtener raíces exactas de f(x)=0 cuando la función es polinómica.
+        Si la función no es polinómica, muestra un aviso porque no siempre existen
+        raíces exactas simbólicas para sen, cos, log, exp, etc.
+        """
+        try:
+            x = sp.symbols("x")
+            expresion = str(funcion_texto).strip()
+
+            if not expresion:
+                return "Raíces exactas: función vacía."
+
+            if hasattr(self.metodo_actual, "preparar_expresion"):
+                expresion = self.metodo_actual.preparar_expresion(expresion)
+            else:
+                expresion = expresion.replace("^", "**")
+                expresion = expresion.replace("sen", "sin")
+                expresion = expresion.replace("ln", "log")
+
+            locales = {
+                "x": x,
+                "sin": sp.sin,
+                "cos": sp.cos,
+                "tan": sp.tan,
+                "log": sp.log,
+                "ln": sp.log,
+                "exp": sp.exp,
+                "sqrt": sp.sqrt,
+                "pi": sp.pi,
+                "e": sp.E,
+            }
+
+            expresion_simbolica = sp.sympify(expresion, locals=locales)
+            expresion_simbolica = sp.nsimplify(expresion_simbolica)
+
+            try:
+                polinomio = sp.Poly(expresion_simbolica, x)
+            except Exception:
+                return "Raíces exactas: no aplica de forma simbólica para esta función."
+
+            raices_con_multiplicidad = sp.roots(polinomio.as_expr(), x)
+
+            if not raices_con_multiplicidad:
+                raices_numericas = []
+                for raiz in sp.nroots(polinomio.as_expr()):
+                    raiz_compleja = complex(raiz)
+                    if abs(raiz_compleja.imag) < 1e-9:
+                        raices_numericas.append(raiz_compleja.real)
+
+                if not raices_numericas:
+                    return "Raíces exactas: no se encontraron raíces reales."
+
+                texto_aprox = ", ".join(f"x ≈ {raiz:.10f}" for raiz in raices_numericas)
+                return f"Raíces aproximadas reales: {texto_aprox}"
+
+            partes = []
+
+            for raiz, multiplicidad in raices_con_multiplicidad.items():
+                raiz_compleja = complex(sp.N(raiz, 15))
+
+                if abs(raiz_compleja.imag) >= 1e-9:
+                    continue
+
+                raiz_exacta = sp.sstr(sp.simplify(raiz))
+                raiz_decimal = float(raiz_compleja.real)
+
+                if multiplicidad > 1:
+                    partes.append(f"x = {raiz_exacta} ≈ {raiz_decimal:.10f} (mult. {multiplicidad})")
+                else:
+                    partes.append(f"x = {raiz_exacta} ≈ {raiz_decimal:.10f}")
+
+            if not partes:
+                return "Raíces exactas: no se encontraron raíces reales."
+
+            return "Raíces exactas: " + "; ".join(partes)
+
+        except Exception as error:
+            return f"Raíces exactas: no se pudieron calcular ({error})."
+
+    def agregar_raices_exactas_a_datos(self, datos, funcion_texto):
+        raices = self.obtener_raices_exactas_texto(funcion_texto)
+        mensaje_actual = datos.get("mensaje", "")
+        datos["mensaje"] = f"{mensaje_actual}\n{raices}"
+        datos["raices_exactas"] = raices
+        return datos
 
     # =========================================================
     # PANTALLA PRINCIPAL
@@ -350,6 +445,28 @@ class App(ctk.CTk):
 
         if self.normalizar(nombre_metodo) == self.normalizar("Secante"):
             self.mostrar_secante()
+            return
+
+        if self.normalizar(nombre_metodo) == self.normalizar("Newton"):
+            self.mostrar_newton()
+            return
+
+        if self.normalizar(nombre_metodo) == self.normalizar("Muller") or self.normalizar(nombre_metodo) == self.normalizar("Müller"):
+            self.mostrar_muller()
+            return
+
+        if self.normalizar(nombre_metodo) == self.normalizar("Lagrange"):
+            self.mostrar_lagrange()
+            return
+
+        if (
+            self.normalizar(nombre_metodo) == self.normalizar("Diferencias divididas")
+            or self.normalizar(nombre_metodo) == self.normalizar("Diferencia dividida")
+            or self.normalizar(nombre_metodo) == self.normalizar("Diferencia dividida adelante")
+            or self.normalizar(nombre_metodo) == self.normalizar("Diferencia dividida atrás")
+            or self.normalizar(nombre_metodo) == self.normalizar("Diferencia dividida atras")
+        ):
+            self.mostrar_diferencias_divididas()
             return
 
         self.mostrar_pantalla_metodo()
@@ -1405,6 +1522,7 @@ class App(ctk.CTk):
                 b=self.bis_b.get(),
                 tolerancia=self.bis_error.get(),
             )
+            datos = self.agregar_raices_exactas_a_datos(datos, self.bis_funcion.get())
 
             self.dibujar_grafica_biseccion(
                 funcion_numpy=datos["funcion_numpy"],
@@ -2014,6 +2132,7 @@ class App(ctk.CTk):
                 b=self.fp_b.get(),
                 tolerancia=self.fp_error.get(),
             )
+            datos = self.agregar_raices_exactas_a_datos(datos, self.fp_funcion.get())
 
             self.dibujar_grafica_falsa_posicion(
                 funcion_numpy=datos["funcion_numpy"],
@@ -2629,6 +2748,7 @@ class App(ctk.CTk):
                 p1=self.sec_p1.get(),
                 tolerancia=self.sec_error.get(),
             )
+            datos = self.agregar_raices_exactas_a_datos(datos, self.sec_funcion.get())
 
             self.dibujar_grafica_secante(
                 funcion_numpy=datos["funcion_numpy"],
@@ -2922,6 +3042,2817 @@ class App(ctk.CTk):
             font=("Arial", 14),
             text_color="#fca5a5",
             wraplength=620,
+            justify="left",
+        ).grid(row=1, column=0, padx=18, pady=(0, 18), sticky="w")
+
+
+    # =========================================================
+    # PANTALLA ESPECIAL: NEWTON-RAPHSON
+    # =========================================================
+
+    def mostrar_newton(self):
+        self.limpiar_pantalla()
+
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)
+
+        encabezado = ctk.CTkFrame(
+            self,
+            fg_color="#102d52",
+            corner_radius=0,
+            border_width=0,
+        )
+        encabezado.grid(row=0, column=0, sticky="ew")
+        encabezado.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkButton(
+            encabezado,
+            text="← Inicio",
+            command=self.mostrar_inicio,
+            width=110,
+            height=34,
+            fg_color="#1a1f2b",
+            hover_color="#243044",
+            border_width=1,
+            border_color="#496386",
+        ).grid(row=0, column=0, padx=22, pady=18, sticky="w")
+
+        self.crear_label(
+            encabezado,
+            "Newton-Raphson",
+            tamano=26,
+            peso="bold",
+            color="#ffffff",
+        ).grid(row=0, column=1, padx=10, pady=18, sticky="w")
+
+        cuerpo = ctk.CTkFrame(self, fg_color="transparent")
+        cuerpo.grid(row=1, column=0, padx=28, pady=24, sticky="nsew")
+        cuerpo.grid_columnconfigure(0, weight=1)
+        cuerpo.grid_columnconfigure(1, weight=1)
+        cuerpo.grid_rowconfigure(0, weight=1)
+
+        panel_entrada = ctk.CTkScrollableFrame(
+            cuerpo,
+            fg_color="#101216",
+            corner_radius=16,
+            border_width=1,
+            border_color="#303846",
+        )
+        panel_entrada.grid(row=0, column=0, padx=(0, 10), pady=0, sticky="nsew")
+        panel_entrada.grid_columnconfigure(0, weight=1)
+
+        panel_resultado = ctk.CTkFrame(
+            cuerpo,
+            fg_color="#101216",
+            corner_radius=16,
+            border_width=1,
+            border_color="#303846",
+        )
+        panel_resultado.grid(row=0, column=1, padx=(10, 0), pady=0, sticky="nsew")
+        panel_resultado.grid_columnconfigure(0, weight=1)
+        panel_resultado.grid_rowconfigure(4, weight=1)
+
+        self.newton_resultado_panel = panel_resultado
+        self.newton_intervalo_actual = None
+
+        self.crear_label(
+            panel_entrada,
+            "DATOS DE ENTRADA",
+            tamano=11,
+            peso="bold",
+            color="#75b8ff",
+        ).grid(row=0, column=0, padx=22, pady=(22, 0), sticky="w")
+
+        self.crear_label(
+            panel_entrada,
+            "Construye la función, elige un P0 cercano y ejecuta Newton-Raphson.",
+            tamano=18,
+            peso="bold",
+            color="#ffffff",
+        ).grid(row=1, column=0, padx=22, pady=(4, 16), sticky="w")
+
+        self.newton_funcion = self.crear_input_newton(
+            panel_entrada,
+            2,
+            "Función f(x)",
+            "Ejemplo: 30*x**3 - 325*x**2 + 1170*x - 1400"
+        )
+
+        self.construir_calculadora_newton(panel_entrada, 4)
+
+        ctk.CTkLabel(
+            panel_entrada,
+            text=(
+                "El programa buscará automáticamente intervalos con cambio de signo "
+                "usando la función escrita y te mostrará opciones para elegir P0."
+            ),
+            font=("Arial", 13),
+            text_color="#cbd5e1",
+            justify="left",
+            wraplength=560,
+        ).grid(row=5, column=0, padx=22, pady=(12, 8), sticky="w")
+
+        ctk.CTkButton(
+            panel_entrada,
+            text="Buscar P0 sugeridos automáticamente",
+            command=self.buscar_intervalos_newton,
+            height=40,
+            corner_radius=10,
+            font=("Arial", 14, "bold"),
+            fg_color="#7c3aed",
+            hover_color="#6d28d9",
+        ).grid(row=6, column=0, padx=22, pady=(0, 10), sticky="ew")
+
+        self.newton_intervalos_frame = ctk.CTkScrollableFrame(
+            panel_entrada,
+            fg_color="#151a22",
+            corner_radius=12,
+            border_width=1,
+            border_color="#2a3342",
+            height=150,
+        )
+        self.newton_intervalos_frame.grid(row=7, column=0, padx=22, pady=(0, 14), sticky="ew")
+        self.newton_intervalos_frame.grid_columnconfigure(0, weight=1)
+
+        self.crear_label(
+            self.newton_intervalos_frame,
+            "Escribe la función y presiona el botón morado para generar opciones de P0.",
+            tamano=13,
+            color="#cbd5e1",
+        ).grid(row=0, column=0, padx=12, pady=12, sticky="w")
+
+        datos_newton = ctk.CTkFrame(panel_entrada, fg_color="transparent")
+        datos_newton.grid(row=8, column=0, padx=22, pady=(4, 4), sticky="ew")
+        datos_newton.grid_columnconfigure(0, weight=1)
+        datos_newton.grid_columnconfigure(1, weight=1)
+
+        self.newton_p0 = self.crear_input_newton_chico(datos_newton, 0, "P0 elegido", "Elige uno de arriba o escribe uno")
+        self.newton_error = self.crear_input_newton_chico(datos_newton, 1, "Error máximo", "1e-5")
+
+        ctk.CTkButton(
+            panel_entrada,
+            text="Graficar función",
+            command=self.graficar_newton_desde_formulario,
+            height=40,
+            corner_radius=10,
+            font=("Arial", 14, "bold"),
+            fg_color="#159a73",
+            hover_color="#0f7a5d",
+        ).grid(row=9, column=0, padx=22, pady=(12, 8), sticky="ew")
+
+        ctk.CTkButton(
+            panel_entrada,
+            text="Calcular Newton-Raphson",
+            command=self.calcular_newton,
+            height=44,
+            corner_radius=10,
+            font=("Arial", 15, "bold"),
+            fg_color="#1f6feb",
+            hover_color="#1959bd",
+        ).grid(row=10, column=0, padx=22, pady=(0, 24), sticky="ew")
+
+        self.crear_label(
+            panel_resultado,
+            "DERIVADA",
+            tamano=11,
+            peso="bold",
+            color="#75b8ff",
+        ).grid(row=0, column=0, padx=22, pady=(22, 0), sticky="w")
+
+        self.newton_derivada_label = ctk.CTkLabel(
+            panel_resultado,
+            text="Aquí aparecerá f'(x).",
+            font=("Arial", 14, "bold"),
+            text_color="#ffffff",
+            fg_color="#151a22",
+            corner_radius=10,
+            anchor="w",
+            justify="left",
+        )
+        self.newton_derivada_label.grid(row=1, column=0, padx=22, pady=(8, 12), sticky="ew")
+
+        self.crear_label(
+            panel_resultado,
+            "GRÁFICA",
+            tamano=11,
+            peso="bold",
+            color="#75b8ff",
+        ).grid(row=2, column=0, padx=22, pady=(0, 0), sticky="w")
+
+        self.newton_grafica_frame = ctk.CTkFrame(
+            panel_resultado,
+            fg_color="#151a22",
+            corner_radius=12,
+            border_width=1,
+            border_color="#2a3342",
+        )
+        self.newton_grafica_frame.grid(row=3, column=0, padx=22, pady=(10, 14), sticky="ew")
+        self.newton_grafica_frame.grid_columnconfigure(0, weight=1)
+
+        self.crear_label(
+            self.newton_grafica_frame,
+            "Aquí aparecerá la gráfica de f(x), P0, la tangente y la aproximación.",
+            tamano=14,
+            color="#cbd5e1",
+        ).grid(row=0, column=0, padx=18, pady=18, sticky="w")
+
+        self.newton_tabla_frame = ctk.CTkScrollableFrame(
+            panel_resultado,
+            fg_color="#151a22",
+            corner_radius=12,
+            border_width=1,
+            border_color="#2a3342",
+        )
+        self.newton_tabla_frame.grid(row=4, column=0, padx=22, pady=(0, 22), sticky="nsew")
+        self.newton_tabla_frame.grid_columnconfigure(0, weight=1)
+
+        self.crear_label(
+            self.newton_tabla_frame,
+            "Aquí aparecerá la tabla de iteraciones.",
+            tamano=14,
+            color="#cbd5e1",
+        ).grid(row=0, column=0, padx=18, pady=18, sticky="w")
+
+    def crear_input_newton(self, padre, fila, texto, placeholder=""):
+        ctk.CTkLabel(
+            padre,
+            text=texto,
+            font=("Arial", 13, "bold"),
+            text_color="#f1f5ff",
+        ).grid(row=fila, column=0, padx=22, pady=(10, 4), sticky="w")
+
+        entrada = ctk.CTkEntry(
+            padre,
+            placeholder_text=placeholder,
+            height=38,
+            corner_radius=9,
+            fg_color="#0f141b",
+            border_color="#344054",
+            text_color="#ffffff",
+            font=("Arial", 14),
+        )
+        entrada.grid(row=fila + 1, column=0, padx=22, pady=(0, 8), sticky="ew")
+        return entrada
+
+    def crear_input_newton_chico(self, padre, columna, texto, placeholder=""):
+        contenedor = ctk.CTkFrame(padre, fg_color="transparent")
+        contenedor.grid(row=0, column=columna, padx=6, pady=0, sticky="ew")
+        contenedor.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            contenedor,
+            text=texto,
+            font=("Arial", 13, "bold"),
+            text_color="#f1f5ff",
+        ).grid(row=0, column=0, pady=(0, 4), sticky="w")
+
+        entrada = ctk.CTkEntry(
+            contenedor,
+            placeholder_text=placeholder,
+            height=36,
+            corner_radius=9,
+            fg_color="#0f141b",
+            border_color="#344054",
+            text_color="#ffffff",
+            font=("Arial", 13),
+        )
+        entrada.grid(row=1, column=0, sticky="ew")
+        return entrada
+
+    def construir_calculadora_newton(self, padre, fila):
+        calculadora = ctk.CTkFrame(
+            padre,
+            fg_color="#151a22",
+            corner_radius=14,
+            border_width=1,
+            border_color="#2a3342",
+        )
+        calculadora.grid(row=fila, column=0, padx=22, pady=(8, 10), sticky="ew")
+
+        for columna in range(4):
+            calculadora.grid_columnconfigure(columna, weight=1)
+
+        botones = [
+            ("x", "x"), ("sin", "sin("), ("cos", "cos("), ("C", "clear"),
+            ("+", "+"), ("-", "-"), ("×", "*"), ("÷", "/"),
+            ("x²", "**2"), ("xʸ", "**"), ("eˣ", "exp("), ("ln", "log("),
+            ("(", "("), (")", ")"), ("π", "pi"), ("⌫", "back"),
+        ]
+
+        for i, (texto, valor) in enumerate(botones):
+            fila_boton = i // 4
+            columna_boton = i % 4
+
+            if valor == "clear":
+                comando = self.limpiar_funcion_newton
+                color = "#dc2626"
+                hover = "#b91c1c"
+            elif valor == "back":
+                comando = self.borrar_funcion_newton
+                color = "#0ea5e9"
+                hover = "#0284c7"
+            else:
+                comando = lambda v=valor: self.insertar_funcion_newton(v)
+                color = "#1a1f2b"
+                hover = "#243044"
+
+            ctk.CTkButton(
+                calculadora,
+                text=texto,
+                command=comando,
+                height=42,
+                corner_radius=9,
+                fg_color=color,
+                hover_color=hover,
+                border_width=1,
+                border_color="#343c4c",
+                text_color="#ffffff",
+                font=("Arial", 14, "bold"),
+            ).grid(row=fila_boton, column=columna_boton, padx=6, pady=6, sticky="ew")
+
+    def insertar_funcion_newton(self, texto):
+        self.newton_funcion.insert("end", texto)
+        self.newton_funcion.focus()
+
+    def limpiar_funcion_newton(self):
+        self.newton_funcion.delete(0, "end")
+        self.newton_funcion.focus()
+
+    def borrar_funcion_newton(self):
+        texto = self.newton_funcion.get()
+        self.newton_funcion.delete(0, "end")
+        self.newton_funcion.insert(0, texto[:-1])
+        self.newton_funcion.focus()
+
+    def limpiar_grafica_newton(self):
+        for widget in self.newton_grafica_frame.winfo_children():
+            widget.destroy()
+
+    def limpiar_tabla_newton(self):
+        for widget in self.newton_tabla_frame.winfo_children():
+            widget.destroy()
+
+    def formatear_numero_newton(self, valor):
+        try:
+            return f"{float(valor):.6f}"
+        except Exception:
+            return str(valor)
+
+    def buscar_intervalos_newton(self):
+        for widget in self.newton_intervalos_frame.winfo_children():
+            widget.destroy()
+
+        try:
+            funcion = self.newton_funcion.get()
+
+            # Búsqueda automática. Primero revisa una zona común;
+            # si no encuentra nada, amplía el rango.
+            rangos_busqueda = [
+                (-10, 10, 0.5),
+                (-50, 50, 1),
+                (-100, 100, 2),
+            ]
+
+            datos = None
+            intervalos = []
+            rango_usado = None
+
+            for desde, hasta, paso in rangos_busqueda:
+                datos = self.metodo_actual.buscar_intervalos_cambio_signo(
+                    funcion=funcion,
+                    desde=desde,
+                    hasta=hasta,
+                    paso=paso,
+                )
+
+                intervalos = datos["intervalos"]
+
+                if intervalos:
+                    rango_usado = (desde, hasta, paso)
+                    break
+
+            if datos is None:
+                raise ValueError("No se pudo analizar la función.")
+
+            self.newton_derivada_label.configure(
+                text=f"f'(x) = {datos['derivada']}"
+            )
+
+            if not intervalos:
+                self.crear_label(
+                    self.newton_intervalos_frame,
+                    "No se encontraron cambios de signo de -100 a 100. Puedes escribir P0 manualmente.",
+                    tamano=13,
+                    color="#fca5a5",
+                ).grid(row=0, column=0, padx=12, pady=12, sticky="w")
+                return
+
+            desde, hasta, paso = rango_usado
+
+            self.crear_label(
+                self.newton_intervalos_frame,
+                f"Cambios de signo encontrados automáticamente en [{desde}, {hasta}] con paso {paso}. Elige un P0:",
+                tamano=13,
+                color="#cbd5e1",
+            ).grid(row=0, column=0, padx=12, pady=(12, 4), sticky="w")
+
+            for i, intervalo in enumerate(intervalos, start=1):
+                texto_boton = (
+                    f"Opción {i}: intervalo [{intervalo['a']:.6f}, {intervalo['b']:.6f}]  "
+                    f"→ usar P0 = {intervalo['p0_sugerido']:.6f}"
+                )
+
+                boton = ctk.CTkButton(
+                    self.newton_intervalos_frame,
+                    text=texto_boton,
+                    height=34,
+                    corner_radius=8,
+                    fg_color="#1a1f2b",
+                    hover_color="#123b6d",
+                    border_width=1,
+                    border_color="#343c4c",
+                    text_color="#ffffff",
+                    font=("Arial", 12, "bold"),
+                    command=lambda inter=intervalo: self.usar_intervalo_newton(inter),
+                )
+                boton.grid(row=i, column=0, padx=12, pady=(8, 0), sticky="ew")
+
+        except Exception as error:
+            self.crear_label(
+                self.newton_intervalos_frame,
+                f"Error: {error}",
+                tamano=13,
+                color="#fca5a5",
+            ).grid(row=0, column=0, padx=12, pady=12, sticky="w")
+
+    def usar_intervalo_newton(self, intervalo):
+        p0 = intervalo["p0_sugerido"]
+        self.newton_intervalo_actual = (intervalo["a"], intervalo["b"])
+
+        self.newton_p0.delete(0, "end")
+        self.newton_p0.insert(0, f"{p0:.10f}")
+
+    def graficar_newton_desde_formulario(self):
+        try:
+            (
+                expresion,
+                derivada,
+                f,
+                fp,
+                f_numpy,
+                fp_numpy
+            ) = self.metodo_actual.obtener_funciones(self.newton_funcion.get())
+
+            p0 = self.metodo_actual.convertir_numero(self.newton_p0.get())
+
+            self.newton_derivada_label.configure(text=f"f'(x) = {derivada}")
+
+            self.dibujar_grafica_newton(
+                funcion_numpy=f_numpy,
+                derivada_numpy=fp_numpy,
+                p0=p0,
+                aprox=None,
+            )
+
+        except Exception as error:
+            self.mostrar_error_newton(str(error))
+
+    def calcular_newton(self):
+        try:
+            datos = self.metodo_actual.calcular_detallado(
+                funcion=self.newton_funcion.get(),
+                p0=self.newton_p0.get(),
+                tolerancia=self.newton_error.get(),
+            )
+            datos = self.agregar_raices_exactas_a_datos(datos, self.newton_funcion.get())
+
+            self.newton_derivada_label.configure(
+                text=f"f'(x) = {datos['derivada']}"
+            )
+
+            self.dibujar_grafica_newton(
+                funcion_numpy=datos["funcion_numpy"],
+                derivada_numpy=datos["derivada_numpy"],
+                p0=datos["p0_inicial"],
+                aprox=datos["raiz"],
+            )
+
+            self.mostrar_tabla_newton(datos)
+
+        except Exception as error:
+            self.mostrar_error_newton(str(error))
+
+    def dibujar_grafica_newton(self, funcion_numpy, derivada_numpy, p0, aprox=None):
+        self.limpiar_grafica_newton()
+
+        try:
+            y0 = float(funcion_numpy(p0))
+            m = float(derivada_numpy(p0))
+        except Exception as error:
+            self.mostrar_error_newton(f"No se pudo evaluar P0. Detalle: {error}")
+            return
+
+        puntos_x = [p0]
+
+        if aprox is not None:
+            puntos_x.append(aprox)
+
+        if self.newton_intervalo_actual is not None:
+            puntos_x.extend(list(self.newton_intervalo_actual))
+
+        x_min_base = min(puntos_x)
+        x_max_base = max(puntos_x)
+
+        ancho = abs(x_max_base - x_min_base)
+
+        if ancho == 0:
+            ancho = 1
+
+        margen_x = ancho * 0.35
+        x_ini = x_min_base - margen_x
+        x_fin = x_max_base + margen_x
+
+        xs = np.linspace(x_ini, x_fin, 800)
+
+        with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+            try:
+                ys = funcion_numpy(xs)
+            except Exception:
+                ys = np.array([funcion_numpy(float(x)) for x in xs])
+
+        ys = np.array(ys, dtype=float)
+
+        mascara = np.isfinite(ys)
+        xs_validos = xs[mascara]
+        ys_validos = ys[mascara]
+
+        if len(xs_validos) == 0:
+            self.mostrar_error_newton("No se pudo graficar la función en ese intervalo.")
+            return
+
+        ys_tangente = y0 + m * (xs_validos - p0)
+
+        valores_y = list(ys_validos)
+        valores_y.append(y0)
+        valores_y.append(0)
+
+        if aprox is not None:
+            try:
+                valor_aprox = float(funcion_numpy(aprox))
+                if np.isfinite(valor_aprox):
+                    valores_y.append(valor_aprox)
+            except Exception:
+                pass
+
+        valores_y = np.array(valores_y, dtype=float)
+        valores_y = valores_y[np.isfinite(valores_y)]
+
+        y_min = np.min(valores_y)
+        y_max = np.max(valores_y)
+
+        if y_min == y_max:
+            y_min -= 1
+            y_max += 1
+
+        margen_y = abs(y_max - y_min) * 0.20
+        y_min -= margen_y
+        y_max += margen_y
+
+        figura = Figure(figsize=(7.4, 3.8), dpi=100)
+        figura.patch.set_facecolor("#151a22")
+
+        eje = figura.add_subplot(111)
+        eje.set_facecolor("#101216")
+
+        eje.plot(xs_validos, ys_validos, linewidth=2, color="#7cc7ff", label="f(x)")
+        eje.plot(xs_validos, ys_tangente, linestyle="--", linewidth=1.8, color="#a78bfa", label="tangente")
+
+        eje.axhline(0, color="#ffffff", linewidth=1, alpha=0.75)
+
+        if x_ini <= 0 <= x_fin:
+            eje.axvline(0, color="#ffffff", linewidth=1, alpha=0.25)
+
+        eje.scatter([p0], [y0], color="#ef4444", s=75, label="P0", zorder=5)
+
+        eje.annotate(
+            "P0",
+            (p0, y0),
+            textcoords="offset points",
+            xytext=(0, 10),
+            ha="center",
+            color="#ef4444",
+            fontsize=12,
+            fontweight="bold",
+        )
+
+        eje.axvline(p0, color="#ef4444", linewidth=1, alpha=0.30)
+
+        if aprox is not None:
+            eje.scatter([aprox], [0], color="#22c55e", s=85, label="Raíz aprox", zorder=6)
+
+            eje.annotate(
+                "Raíz",
+                (aprox, 0),
+                textcoords="offset points",
+                xytext=(0, 10),
+                ha="center",
+                color="#22c55e",
+                fontsize=12,
+                fontweight="bold",
+            )
+
+            eje.axvline(aprox, color="#22c55e", linewidth=1, alpha=0.30)
+
+        eje.set_xlim(x_ini, x_fin)
+        eje.set_ylim(y_min, y_max)
+
+        eje.grid(True, alpha=0.25)
+        eje.tick_params(colors="#dbeafe")
+        eje.ticklabel_format(useOffset=False)
+
+        eje.spines["bottom"].set_color("#64748b")
+        eje.spines["top"].set_color("#64748b")
+        eje.spines["left"].set_color("#64748b")
+        eje.spines["right"].set_color("#64748b")
+
+        eje.set_title("Newton-Raphson", color="#ffffff", fontsize=13, fontweight="bold")
+        eje.set_xlabel("x", color="#dbeafe")
+        eje.set_ylabel("f(x)", color="#dbeafe")
+
+        leyenda = eje.legend()
+        if leyenda:
+            leyenda.get_frame().set_facecolor("#151a22")
+            leyenda.get_frame().set_edgecolor("#344054")
+
+            for texto in leyenda.get_texts():
+                texto.set_color("#ffffff")
+
+        figura.tight_layout()
+
+        canvas = FigureCanvasTkAgg(figura, master=self.newton_grafica_frame)
+        canvas.draw()
+        canvas.get_tk_widget().grid(row=0, column=0, padx=12, pady=12, sticky="nsew")
+
+    def mostrar_tabla_newton(self, datos):
+        self.limpiar_tabla_newton()
+
+        self.newton_tabla_frame.grid_columnconfigure(0, weight=1)
+
+        tarjeta = ctk.CTkFrame(
+            self.newton_tabla_frame,
+            fg_color="#172238",
+            corner_radius=10,
+            border_width=1,
+            border_color="#24344f",
+        )
+        tarjeta.grid(row=0, column=0, padx=14, pady=(14, 12), sticky="ew")
+        tarjeta.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            tarjeta,
+            text="Raíz aproximada",
+            font=("Arial", 13, "bold"),
+            text_color="#7cc7ff",
+        ).grid(row=0, column=0, padx=16, pady=(12, 4), sticky="w")
+
+        ctk.CTkLabel(
+            tarjeta,
+            text=f"{datos['raiz']:.10f}",
+            font=("Arial", 24, "bold"),
+            text_color="#9fffe4",
+        ).grid(row=1, column=0, padx=16, pady=(0, 6), sticky="w")
+
+        ctk.CTkLabel(
+            tarjeta,
+            text=datos["mensaje"],
+            font=("Arial", 13, "bold"),
+            text_color="#ffffff",
+        ).grid(row=2, column=0, padx=16, pady=(0, 12), sticky="w")
+
+        tabla = ctk.CTkFrame(
+            self.newton_tabla_frame,
+            fg_color="#101216",
+            corner_radius=12,
+            border_width=1,
+            border_color="#303846",
+        )
+        tabla.grid(row=1, column=0, padx=14, pady=(0, 14), sticky="ew")
+
+        encabezados = [
+            "n",
+            "Pᵢ",
+            "f(Pᵢ)",
+            "f'(Pᵢ)",
+            "Pᵢ₊₁",
+            "Error",
+        ]
+
+        for columna, texto in enumerate(encabezados):
+            ctk.CTkLabel(
+                tabla,
+                text=texto,
+                font=("Arial", 12, "bold"),
+                text_color="#ffffff",
+                fg_color="#1f2937",
+                corner_radius=6,
+                width=110,
+                height=30,
+            ).grid(row=0, column=columna, padx=3, pady=4, sticky="ew")
+
+        for fila_indice, fila in enumerate(datos["tabla"], start=1):
+            valores = [
+                fila["n"],
+                self.formatear_numero_newton(fila["pi"]),
+                self.formatear_numero_newton(fila["fpi"]),
+                self.formatear_numero_newton(fila["fppi"]),
+                self.formatear_numero_newton(fila["p_siguiente"]),
+                self.formatear_numero_newton(fila["error"]),
+            ]
+
+            for columna, valor in enumerate(valores):
+                ctk.CTkLabel(
+                    tabla,
+                    text=str(valor),
+                    font=("Arial", 12),
+                    text_color="#e8edf7",
+                    fg_color="#151a22",
+                    corner_radius=6,
+                    width=110,
+                    height=28,
+                ).grid(row=fila_indice, column=columna, padx=3, pady=3, sticky="ew")
+
+    def mostrar_error_newton(self, mensaje):
+        self.limpiar_tabla_newton()
+
+        ctk.CTkLabel(
+            self.newton_tabla_frame,
+            text="No se pudo calcular",
+            font=("Arial", 18, "bold"),
+            text_color="#ffffff",
+        ).grid(row=0, column=0, padx=18, pady=(18, 6), sticky="w")
+
+        ctk.CTkLabel(
+            self.newton_tabla_frame,
+            text=mensaje,
+            font=("Arial", 14),
+            text_color="#fca5a5",
+            wraplength=620,
+            justify="left",
+        ).grid(row=1, column=0, padx=18, pady=(0, 18), sticky="w")
+
+
+    # =========================================================
+    # PANTALLA ESPECIAL: MÜLLER
+    # =========================================================
+
+    def mostrar_muller(self):
+        self.limpiar_pantalla()
+
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)
+
+        encabezado = ctk.CTkFrame(
+            self,
+            fg_color="#102d52",
+            corner_radius=0,
+            border_width=0,
+        )
+        encabezado.grid(row=0, column=0, sticky="ew")
+        encabezado.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkButton(
+            encabezado,
+            text="← Inicio",
+            command=self.mostrar_inicio,
+            width=110,
+            height=34,
+            fg_color="#1a1f2b",
+            hover_color="#243044",
+            border_width=1,
+            border_color="#496386",
+        ).grid(row=0, column=0, padx=22, pady=18, sticky="w")
+
+        self.crear_label(
+            encabezado,
+            "Müller",
+            tamano=26,
+            peso="bold",
+            color="#ffffff",
+        ).grid(row=0, column=1, padx=10, pady=18, sticky="w")
+
+        cuerpo = ctk.CTkFrame(self, fg_color="transparent")
+        cuerpo.grid(row=1, column=0, padx=28, pady=24, sticky="nsew")
+        cuerpo.grid_columnconfigure(0, weight=1)
+        cuerpo.grid_columnconfigure(1, weight=1)
+        cuerpo.grid_rowconfigure(0, weight=1)
+
+        panel_entrada = ctk.CTkScrollableFrame(
+            cuerpo,
+            fg_color="#101216",
+            corner_radius=16,
+            border_width=1,
+            border_color="#303846",
+        )
+        panel_entrada.grid(row=0, column=0, padx=(0, 10), pady=0, sticky="nsew")
+        panel_entrada.grid_columnconfigure(0, weight=1)
+
+        panel_resultado = ctk.CTkFrame(
+            cuerpo,
+            fg_color="#101216",
+            corner_radius=16,
+            border_width=1,
+            border_color="#303846",
+        )
+        panel_resultado.grid(row=0, column=1, padx=(10, 0), pady=0, sticky="nsew")
+        panel_resultado.grid_columnconfigure(0, weight=1)
+        panel_resultado.grid_rowconfigure(2, weight=1)
+
+        self.muller_resultado_panel = panel_resultado
+
+        self.crear_label(
+            panel_entrada,
+            "DATOS DE ENTRADA",
+            tamano=11,
+            peso="bold",
+            color="#75b8ff",
+        ).grid(row=0, column=0, padx=22, pady=(22, 0), sticky="w")
+
+        self.crear_label(
+            panel_entrada,
+            "Construye la función, escribe P0, P1 y P2, y ejecuta el método.",
+            tamano=18,
+            peso="bold",
+            color="#ffffff",
+        ).grid(row=1, column=0, padx=22, pady=(4, 16), sticky="w")
+
+        self.muller_funcion = self.crear_input_muller(
+            panel_entrada,
+            2,
+            "Función f(x)",
+            "Ejemplo: x**3 - x - 2"
+        )
+
+        self.construir_calculadora_muller(panel_entrada, 4)
+
+        datos_intervalo = ctk.CTkFrame(panel_entrada, fg_color="transparent")
+        datos_intervalo.grid(row=5, column=0, padx=22, pady=(12, 4), sticky="ew")
+        datos_intervalo.grid_columnconfigure(0, weight=1)
+        datos_intervalo.grid_columnconfigure(1, weight=1)
+        datos_intervalo.grid_columnconfigure(2, weight=1)
+        datos_intervalo.grid_columnconfigure(3, weight=1)
+
+        self.muller_p0 = self.crear_input_muller_chico(datos_intervalo, 0, "P0", "0")
+        self.muller_p1 = self.crear_input_muller_chico(datos_intervalo, 1, "P1", "1")
+        self.muller_p2 = self.crear_input_muller_chico(datos_intervalo, 2, "P2", "2")
+        self.muller_error = self.crear_input_muller_chico(datos_intervalo, 3, "Error máximo", "1e-5")
+
+        ctk.CTkButton(
+            panel_entrada,
+            text="Graficar función",
+            command=self.graficar_muller_desde_formulario,
+            height=40,
+            corner_radius=10,
+            font=("Arial", 14, "bold"),
+            fg_color="#159a73",
+            hover_color="#0f7a5d",
+        ).grid(row=6, column=0, padx=22, pady=(12, 8), sticky="ew")
+
+        ctk.CTkButton(
+            panel_entrada,
+            text="Calcular Müller",
+            command=self.calcular_muller,
+            height=44,
+            corner_radius=10,
+            font=("Arial", 15, "bold"),
+            fg_color="#1f6feb",
+            hover_color="#1959bd",
+        ).grid(row=7, column=0, padx=22, pady=(0, 24), sticky="ew")
+
+        self.crear_label(
+            panel_resultado,
+            "GRÁFICA",
+            tamano=11,
+            peso="bold",
+            color="#75b8ff",
+        ).grid(row=0, column=0, padx=22, pady=(22, 0), sticky="w")
+
+        self.muller_grafica_frame = ctk.CTkFrame(
+            panel_resultado,
+            fg_color="#151a22",
+            corner_radius=12,
+            border_width=1,
+            border_color="#2a3342",
+        )
+        self.muller_grafica_frame.grid(row=1, column=0, padx=22, pady=(10, 14), sticky="ew")
+        self.muller_grafica_frame.grid_columnconfigure(0, weight=1)
+
+        self.crear_label(
+            self.muller_grafica_frame,
+            "Aquí aparecerá la gráfica de f(x), los puntos P0, P1, P2 y la aproximación.",
+            tamano=14,
+            color="#cbd5e1",
+        ).grid(row=0, column=0, padx=18, pady=18, sticky="w")
+
+        self.muller_tabla_frame = ctk.CTkScrollableFrame(
+            panel_resultado,
+            fg_color="#151a22",
+            corner_radius=12,
+            border_width=1,
+            border_color="#2a3342",
+        )
+        self.muller_tabla_frame.grid(row=2, column=0, padx=22, pady=(0, 22), sticky="nsew")
+        self.muller_tabla_frame.grid_columnconfigure(0, weight=1)
+
+        self.crear_label(
+            self.muller_tabla_frame,
+            "Aquí aparecerá la tabla de iteraciones.",
+            tamano=14,
+            color="#cbd5e1",
+        ).grid(row=0, column=0, padx=18, pady=18, sticky="w")
+
+    def crear_input_muller(self, padre, fila, texto, placeholder=""):
+        ctk.CTkLabel(
+            padre,
+            text=texto,
+            font=("Arial", 13, "bold"),
+            text_color="#f1f5ff",
+        ).grid(row=fila, column=0, padx=22, pady=(10, 4), sticky="w")
+
+        entrada = ctk.CTkEntry(
+            padre,
+            placeholder_text=placeholder,
+            height=38,
+            corner_radius=9,
+            fg_color="#0f141b",
+            border_color="#344054",
+            text_color="#ffffff",
+            font=("Arial", 14),
+        )
+        entrada.grid(row=fila + 1, column=0, padx=22, pady=(0, 8), sticky="ew")
+        return entrada
+
+    def crear_input_muller_chico(self, padre, columna, texto, placeholder=""):
+        contenedor = ctk.CTkFrame(padre, fg_color="transparent")
+        contenedor.grid(row=0, column=columna, padx=6, pady=0, sticky="ew")
+        contenedor.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            contenedor,
+            text=texto,
+            font=("Arial", 13, "bold"),
+            text_color="#f1f5ff",
+        ).grid(row=0, column=0, pady=(0, 4), sticky="w")
+
+        entrada = ctk.CTkEntry(
+            contenedor,
+            placeholder_text=placeholder,
+            height=36,
+            corner_radius=9,
+            fg_color="#0f141b",
+            border_color="#344054",
+            text_color="#ffffff",
+            font=("Arial", 13),
+        )
+        entrada.grid(row=1, column=0, sticky="ew")
+        return entrada
+
+    def construir_calculadora_muller(self, padre, fila):
+        calculadora = ctk.CTkFrame(
+            padre,
+            fg_color="#151a22",
+            corner_radius=14,
+            border_width=1,
+            border_color="#2a3342",
+        )
+        calculadora.grid(row=fila, column=0, padx=22, pady=(8, 10), sticky="ew")
+
+        for columna in range(4):
+            calculadora.grid_columnconfigure(columna, weight=1)
+
+        botones = [
+            ("x", "x"), ("sin", "sin("), ("cos", "cos("), ("C", "clear"),
+            ("+", "+"), ("-", "-"), ("×", "*"), ("÷", "/"),
+            ("x²", "**2"), ("xʸ", "**"), ("eˣ", "exp("), ("ln", "log("),
+            ("(", "("), (")", ")"), ("π", "pi"), ("⌫", "back"),
+        ]
+
+        for i, (texto, valor) in enumerate(botones):
+            fila_boton = i // 4
+            columna_boton = i % 4
+
+            if valor == "clear":
+                comando = self.limpiar_funcion_muller
+                color = "#dc2626"
+                hover = "#b91c1c"
+            elif valor == "back":
+                comando = self.borrar_funcion_muller
+                color = "#0ea5e9"
+                hover = "#0284c7"
+            else:
+                comando = lambda v=valor: self.insertar_funcion_muller(v)
+                color = "#1a1f2b"
+                hover = "#243044"
+
+            ctk.CTkButton(
+                calculadora,
+                text=texto,
+                command=comando,
+                height=42,
+                corner_radius=9,
+                fg_color=color,
+                hover_color=hover,
+                border_width=1,
+                border_color="#343c4c",
+                text_color="#ffffff",
+                font=("Arial", 14, "bold"),
+            ).grid(row=fila_boton, column=columna_boton, padx=6, pady=6, sticky="ew")
+
+    def insertar_funcion_muller(self, texto):
+        self.muller_funcion.insert("end", texto)
+        self.muller_funcion.focus()
+
+    def limpiar_funcion_muller(self):
+        self.muller_funcion.delete(0, "end")
+        self.muller_funcion.focus()
+
+    def borrar_funcion_muller(self):
+        texto = self.muller_funcion.get()
+        self.muller_funcion.delete(0, "end")
+        self.muller_funcion.insert(0, texto[:-1])
+        self.muller_funcion.focus()
+
+    def limpiar_grafica_muller(self):
+        for widget in self.muller_grafica_frame.winfo_children():
+            widget.destroy()
+
+    def limpiar_tabla_muller(self):
+        for widget in self.muller_tabla_frame.winfo_children():
+            widget.destroy()
+
+    def formatear_numero_muller(self, valor):
+        try:
+            if hasattr(self.metodo_actual, "formatear_complejo"):
+                return self.metodo_actual.formatear_complejo(valor, 6)
+            return f"{float(valor):.6f}"
+        except Exception:
+            return str(valor)
+
+    def muller_a_real_grafica(self, valor):
+        valor = complex(valor)
+        if abs(valor.imag) < 1e-8:
+            return float(valor.real)
+        return None
+
+    def graficar_muller_desde_formulario(self):
+        try:
+            expresion = self.muller_funcion.get()
+            p0 = self.metodo_actual.convertir_numero(self.muller_p0.get())
+            p1 = self.metodo_actual.convertir_numero(self.muller_p1.get())
+            p2 = self.metodo_actual.convertir_numero(self.muller_p2.get())
+
+            _, f_numpy = self.metodo_actual.obtener_funciones(expresion)
+
+            self.dibujar_grafica_muller(
+                funcion_numpy=f_numpy,
+                p0=p0,
+                p1=p1,
+                p2=p2,
+                aprox=None,
+            )
+        except Exception as error:
+            self.mostrar_error_muller(str(error))
+
+    def calcular_muller(self):
+        try:
+            datos = self.metodo_actual.calcular_detallado(
+                funcion=self.muller_funcion.get(),
+                p0=self.muller_p0.get(),
+                p1=self.muller_p1.get(),
+                p2=self.muller_p2.get(),
+                tolerancia=self.muller_error.get(),
+            )
+
+            datos = self.agregar_raices_exactas_a_datos(datos, self.muller_funcion.get())
+
+            self.dibujar_grafica_muller(
+                funcion_numpy=datos["funcion_numpy"],
+                p0=datos["p0_inicial"],
+                p1=datos["p1_inicial"],
+                p2=datos["p2_inicial"],
+                aprox=datos["c_final"],
+            )
+
+            self.mostrar_tabla_muller(datos)
+
+        except Exception as error:
+            self.mostrar_error_muller(str(error))
+
+    def dibujar_grafica_muller(self, funcion_numpy, p0, p1, p2, aprox=None):
+        self.limpiar_grafica_muller()
+
+        puntos_reales = []
+
+        for punto in [p0, p1, p2, aprox]:
+            if punto is not None:
+                valor_real = self.muller_a_real_grafica(punto)
+                if valor_real is not None:
+                    puntos_reales.append(valor_real)
+
+        if not puntos_reales:
+            self.mostrar_error_muller("La aproximación es compleja; no se puede representar completa en la gráfica real.")
+            return
+
+        x_min_base = min(puntos_reales)
+        x_max_base = max(puntos_reales)
+        ancho = abs(x_max_base - x_min_base)
+
+        if ancho == 0:
+            ancho = 1
+
+        margen_x = ancho * 0.35
+        x_min = x_min_base - margen_x
+        x_max = x_max_base + margen_x
+
+        xs = np.linspace(x_min, x_max, 900)
+
+        with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+            try:
+                ys = funcion_numpy(xs)
+            except Exception:
+                ys = np.array([funcion_numpy(float(x)) for x in xs])
+
+        ys = np.array(ys, dtype=complex)
+
+        mascara = np.isfinite(ys.real) & np.isfinite(ys.imag) & (np.abs(ys.imag) < 1e-8)
+        xs_validos = xs[mascara]
+        ys_validos = ys.real[mascara]
+
+        if len(xs_validos) == 0:
+            self.mostrar_error_muller("No se pudo graficar la función en ese intervalo.")
+            return
+
+        valores_y = list(ys_validos)
+
+        puntos_info = []
+        for punto, etiqueta, color in [
+            (p0, "P0", "#ef4444"),
+            (p1, "P1", "#f28c28"),
+            (p2, "P2", "#eab308"),
+            (aprox, "Aprox", "#22c55e"),
+        ]:
+            x_real = None if punto is None else self.muller_a_real_grafica(punto)
+            if x_real is None:
+                continue
+
+            try:
+                y_punto = complex(funcion_numpy(x_real))
+                if abs(y_punto.imag) < 1e-8 and np.isfinite(y_punto.real):
+                    puntos_info.append((x_real, float(y_punto.real), etiqueta, color))
+                    valores_y.append(float(y_punto.real))
+            except Exception:
+                pass
+
+        valores_y = np.array(valores_y, dtype=float)
+        valores_y = valores_y[np.isfinite(valores_y)]
+
+        y_min = np.min(valores_y)
+        y_max = np.max(valores_y)
+
+        if y_min == y_max:
+            y_min -= 1
+            y_max += 1
+
+        margen_y = abs(y_max - y_min) * 0.18
+        y_min -= margen_y
+        y_max += margen_y
+
+        figura = Figure(figsize=(7.4, 3.8), dpi=100)
+        figura.patch.set_facecolor("#151a22")
+
+        eje = figura.add_subplot(111)
+        eje.set_facecolor("#101216")
+
+        eje.plot(
+            xs_validos,
+            ys_validos,
+            linewidth=2,
+            color="#7cc7ff",
+            label="f(x)"
+        )
+
+        # Parábola interpolante que usa Müller en la primera iteración.
+        try:
+            puntos_iniciales = []
+            for punto in [p0, p1, p2]:
+                x_real = self.muller_a_real_grafica(punto)
+                if x_real is None:
+                    raise ValueError()
+                y_real = complex(funcion_numpy(x_real))
+                if abs(y_real.imag) >= 1e-8:
+                    raise ValueError()
+                puntos_iniciales.append((x_real, float(y_real.real)))
+
+            xs_parabola = np.array([p[0] for p in puntos_iniciales], dtype=float)
+            ys_parabola = np.array([p[1] for p in puntos_iniciales], dtype=float)
+
+            if len(set(xs_parabola)) == 3:
+                coeficientes = np.polyfit(xs_parabola, ys_parabola, 2)
+                y_parabola = np.polyval(coeficientes, xs_validos)
+                eje.plot(
+                    xs_validos,
+                    y_parabola,
+                    color="#a78bfa",
+                    linestyle="--",
+                    linewidth=1.5,
+                    label="parábola de Müller"
+                )
+        except Exception:
+            pass
+
+        eje.axhline(0, color="#ffffff", linewidth=1, alpha=0.75)
+        if x_min <= 0 <= x_max:
+            eje.axvline(0, color="#ffffff", linewidth=1, alpha=0.25)
+
+        for x_punto, y_punto, etiqueta, color in puntos_info:
+            eje.scatter([x_punto], [y_punto], color=color, s=80, label=etiqueta, zorder=6)
+
+            eje.annotate(
+                etiqueta,
+                (x_punto, y_punto),
+                textcoords="offset points",
+                xytext=(0, 10),
+                ha="center",
+                color=color,
+                fontsize=12,
+                fontweight="bold",
+            )
+
+            eje.axvline(x_punto, color=color, linewidth=1, alpha=0.35)
+
+        eje.set_xlim(x_min, x_max)
+        eje.set_ylim(y_min, y_max)
+
+        eje.grid(True, alpha=0.25)
+        eje.tick_params(colors="#dbeafe")
+        eje.ticklabel_format(useOffset=False)
+
+        eje.spines["bottom"].set_color("#64748b")
+        eje.spines["top"].set_color("#64748b")
+        eje.spines["left"].set_color("#64748b")
+        eje.spines["right"].set_color("#64748b")
+
+        eje.set_title("Método de Müller", color="#ffffff", fontsize=13, fontweight="bold")
+        eje.set_xlabel("x", color="#dbeafe")
+        eje.set_ylabel("f(x)", color="#dbeafe")
+
+        leyenda = eje.legend()
+        if leyenda:
+            leyenda.get_frame().set_facecolor("#151a22")
+            leyenda.get_frame().set_edgecolor("#344054")
+
+            for texto in leyenda.get_texts():
+                texto.set_color("#ffffff")
+
+        figura.tight_layout()
+
+        canvas = FigureCanvasTkAgg(figura, master=self.muller_grafica_frame)
+        canvas.draw()
+        canvas.get_tk_widget().grid(row=0, column=0, padx=12, pady=12, sticky="nsew")
+
+    def mostrar_tabla_muller(self, datos):
+        self.limpiar_tabla_muller()
+
+        self.muller_tabla_frame.grid_columnconfigure(0, weight=1)
+
+        tarjeta = ctk.CTkFrame(
+            self.muller_tabla_frame,
+            fg_color="#172238",
+            corner_radius=10,
+            border_width=1,
+            border_color="#24344f",
+        )
+        tarjeta.grid(row=0, column=0, padx=14, pady=(14, 12), sticky="ew")
+        tarjeta.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            tarjeta,
+            text="Raíz aproximada",
+            font=("Arial", 13, "bold"),
+            text_color="#7cc7ff",
+        ).grid(row=0, column=0, padx=16, pady=(12, 4), sticky="w")
+
+        ctk.CTkLabel(
+            tarjeta,
+            text=datos.get("raiz_texto", str(datos["raiz"])),
+            font=("Arial", 24, "bold"),
+            text_color="#9fffe4",
+        ).grid(row=1, column=0, padx=16, pady=(0, 6), sticky="w")
+
+        ctk.CTkLabel(
+            tarjeta,
+            text=datos["mensaje"],
+            font=("Arial", 13, "bold"),
+            text_color="#ffffff",
+            justify="left",
+        ).grid(row=2, column=0, padx=16, pady=(0, 12), sticky="w")
+
+        tabla = ctk.CTkFrame(
+            self.muller_tabla_frame,
+            fg_color="#101216",
+            corner_radius=12,
+            border_width=1,
+            border_color="#303846",
+        )
+        tabla.grid(row=1, column=0, padx=14, pady=(0, 14), sticky="ew")
+
+        encabezados = [
+            "n",
+            "P0",
+            "P1",
+            "P2",
+            "Aprox P3",
+            "Error",
+        ]
+
+        for columna, texto in enumerate(encabezados):
+            ctk.CTkLabel(
+                tabla,
+                text=texto,
+                font=("Arial", 12, "bold"),
+                text_color="#ffffff",
+                fg_color="#1f2937",
+                corner_radius=6,
+                width=125,
+                height=30,
+            ).grid(row=0, column=columna, padx=3, pady=4, sticky="ew")
+
+        for fila_indice, fila in enumerate(datos["tabla"], start=1):
+            valores = [
+                fila["n"],
+                self.formatear_numero_muller(fila["p0"]),
+                self.formatear_numero_muller(fila["p1"]),
+                self.formatear_numero_muller(fila["p2"]),
+                self.formatear_numero_muller(fila["p3"]),
+                f"{float(fila['error']):.6f}",
+            ]
+
+            for columna, valor in enumerate(valores):
+                ctk.CTkLabel(
+                    tabla,
+                    text=str(valor),
+                    font=("Arial", 12),
+                    text_color="#e8edf7",
+                    fg_color="#151a22",
+                    corner_radius=6,
+                    width=125,
+                    height=28,
+                ).grid(row=fila_indice, column=columna, padx=3, pady=3, sticky="ew")
+
+    def mostrar_error_muller(self, mensaje):
+        self.limpiar_tabla_muller()
+
+        ctk.CTkLabel(
+            self.muller_tabla_frame,
+            text="No se pudo calcular",
+            font=("Arial", 18, "bold"),
+            text_color="#ffffff",
+        ).grid(row=0, column=0, padx=18, pady=(18, 6), sticky="w")
+
+        ctk.CTkLabel(
+            self.muller_tabla_frame,
+            text=mensaje,
+            font=("Arial", 14),
+            text_color="#fca5a5",
+            wraplength=620,
+            justify="left",
+        ).grid(row=1, column=0, padx=18, pady=(0, 18), sticky="w")
+
+
+
+    # =========================================================
+    # PANTALLA ESPECIAL: LAGRANGE
+    # =========================================================
+
+    def mostrar_lagrange(self):
+        self.limpiar_pantalla()
+
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)
+
+        encabezado = ctk.CTkFrame(
+            self,
+            fg_color="#102d52",
+            corner_radius=0,
+            border_width=0,
+        )
+        encabezado.grid(row=0, column=0, sticky="ew")
+        encabezado.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkButton(
+            encabezado,
+            text="← Inicio",
+            command=self.mostrar_inicio,
+            width=110,
+            height=34,
+            fg_color="#1a1f2b",
+            hover_color="#243044",
+            border_width=1,
+            border_color="#496386",
+        ).grid(row=0, column=0, padx=22, pady=18, sticky="w")
+
+        self.crear_label(
+            encabezado,
+            "Lagrange",
+            tamano=26,
+            peso="bold",
+            color="#ffffff",
+        ).grid(row=0, column=1, padx=10, pady=18, sticky="w")
+
+        cuerpo = ctk.CTkFrame(self, fg_color="transparent")
+        cuerpo.grid(row=1, column=0, padx=28, pady=24, sticky="nsew")
+        cuerpo.grid_columnconfigure(0, weight=1)
+        cuerpo.grid_columnconfigure(1, weight=1)
+        cuerpo.grid_rowconfigure(0, weight=1)
+
+        panel_entrada = ctk.CTkScrollableFrame(
+            cuerpo,
+            fg_color="#101216",
+            corner_radius=16,
+            border_width=1,
+            border_color="#303846",
+        )
+        panel_entrada.grid(row=0, column=0, padx=(0, 10), pady=0, sticky="nsew")
+        panel_entrada.grid_columnconfigure(0, weight=1)
+
+        panel_resultado = ctk.CTkFrame(
+            cuerpo,
+            fg_color="#101216",
+            corner_radius=16,
+            border_width=1,
+            border_color="#303846",
+        )
+        panel_resultado.grid(row=0, column=1, padx=(10, 0), pady=0, sticky="nsew")
+        panel_resultado.grid_columnconfigure(0, weight=1)
+        panel_resultado.grid_rowconfigure(3, weight=1)
+
+        self.lag_resultado_panel = panel_resultado
+
+        self.crear_label(
+            panel_entrada,
+            "DATOS DE ENTRADA",
+            tamano=11,
+            peso="bold",
+            color="#75b8ff",
+        ).grid(row=0, column=0, padx=22, pady=(22, 0), sticky="w")
+
+        self.crear_label(
+            panel_entrada,
+            "Escribe f(x), indica cuántos xᵢ usarás y el programa calcula yᵢ = f(xᵢ).",
+            tamano=18,
+            peso="bold",
+            color="#ffffff",
+        ).grid(row=1, column=0, padx=22, pady=(4, 16), sticky="w")
+
+        self.lag_funcion = self.crear_input_lagrange(
+            panel_entrada,
+            2,
+            "Función f(x)",
+            "Ejemplo: x**2 + 2*x + 1"
+        )
+
+        self.construir_calculadora_lagrange(panel_entrada, 4)
+
+        self.lag_num_puntos = self.crear_input_lagrange(
+            panel_entrada,
+            5,
+            "Cantidad de puntos xᵢ",
+            "Ejemplo: 4"
+        )
+
+        ctk.CTkButton(
+            panel_entrada,
+            text="Crear tabla de xᵢ",
+            command=self.crear_tabla_puntos_lagrange,
+            height=40,
+            corner_radius=10,
+            font=("Arial", 14, "bold"),
+            fg_color="#1f6feb",
+            hover_color="#1959bd",
+        ).grid(row=7, column=0, padx=22, pady=(8, 12), sticky="ew")
+
+        self.lag_puntos_frame = ctk.CTkScrollableFrame(
+            panel_entrada,
+            fg_color="#151a22",
+            corner_radius=12,
+            border_width=1,
+            border_color="#2a3342",
+            height=260,
+        )
+        self.lag_puntos_frame.grid(row=8, column=0, padx=22, pady=(0, 14), sticky="ew")
+        self.lag_puntos_frame.grid_columnconfigure(0, weight=1)
+        self.lag_puntos_frame.grid_columnconfigure(1, weight=1)
+        self.lag_puntos_frame.grid_columnconfigure(2, weight=1)
+
+        self.crear_label(
+            self.lag_puntos_frame,
+            "Primero crea la tabla y escribe los xᵢ.",
+            tamano=13,
+            color="#cbd5e1",
+        ).grid(row=0, column=0, padx=12, pady=12, sticky="w")
+
+        self.lag_x_entries = []
+        self.lag_y_labels = []
+
+        ctk.CTkButton(
+            panel_entrada,
+            text="Evaluar yᵢ y calcular polinomio",
+            command=self.calcular_lagrange,
+            height=44,
+            corner_radius=10,
+            font=("Arial", 15, "bold"),
+            fg_color="#159a73",
+            hover_color="#0f7a5d",
+        ).grid(row=9, column=0, padx=22, pady=(0, 24), sticky="ew")
+
+        self.crear_label(
+            panel_resultado,
+            "GRÁFICA",
+            tamano=11,
+            peso="bold",
+            color="#75b8ff",
+        ).grid(row=0, column=0, padx=22, pady=(22, 0), sticky="w")
+
+        self.lag_grafica_frame = ctk.CTkFrame(
+            panel_resultado,
+            fg_color="#151a22",
+            corner_radius=12,
+            border_width=1,
+            border_color="#2a3342",
+        )
+        self.lag_grafica_frame.grid(row=1, column=0, padx=22, pady=(10, 14), sticky="ew")
+        self.lag_grafica_frame.grid_columnconfigure(0, weight=1)
+
+        self.crear_label(
+            self.lag_grafica_frame,
+            "Aquí aparecerá f(x) original, P(x) interpolante y los puntos calculados.",
+            tamano=14,
+            color="#cbd5e1",
+        ).grid(row=0, column=0, padx=18, pady=18, sticky="w")
+
+        self.lag_resultado_frame = ctk.CTkScrollableFrame(
+            panel_resultado,
+            fg_color="#151a22",
+            corner_radius=12,
+            border_width=1,
+            border_color="#2a3342",
+        )
+        self.lag_resultado_frame.grid(row=3, column=0, padx=22, pady=(0, 22), sticky="nsew")
+        self.lag_resultado_frame.grid_columnconfigure(0, weight=1)
+
+        self.crear_label(
+            self.lag_resultado_frame,
+            "Aquí aparecerá el polinomio final y el procedimiento.",
+            tamano=14,
+            color="#cbd5e1",
+        ).grid(row=0, column=0, padx=18, pady=18, sticky="w")
+
+    def crear_input_lagrange(self, padre, fila, texto, placeholder=""):
+        ctk.CTkLabel(
+            padre,
+            text=texto,
+            font=("Arial", 13, "bold"),
+            text_color="#f1f5ff",
+        ).grid(row=fila, column=0, padx=22, pady=(10, 4), sticky="w")
+
+        entrada = ctk.CTkEntry(
+            padre,
+            placeholder_text=placeholder,
+            height=38,
+            corner_radius=9,
+            fg_color="#0f141b",
+            border_color="#344054",
+            text_color="#ffffff",
+            font=("Arial", 14),
+        )
+        entrada.grid(row=fila + 1, column=0, padx=22, pady=(0, 8), sticky="ew")
+        return entrada
+
+    def construir_calculadora_lagrange(self, padre, fila):
+        calculadora = ctk.CTkFrame(
+            padre,
+            fg_color="#151a22",
+            corner_radius=14,
+            border_width=1,
+            border_color="#2a3342",
+        )
+        calculadora.grid(row=fila, column=0, padx=22, pady=(8, 10), sticky="ew")
+
+        for columna in range(4):
+            calculadora.grid_columnconfigure(columna, weight=1)
+
+        botones = [
+            ("x", "x"), ("sin", "sin("), ("cos", "cos("), ("C", "clear"),
+            ("+", "+"), ("-", "-"), ("×", "*"), ("÷", "/"),
+            ("x²", "**2"), ("xʸ", "**"), ("eˣ", "exp("), ("ln", "log("),
+            ("(", "("), (")", ")"), ("π", "pi"), ("⌫", "back"),
+        ]
+
+        for i, (texto, valor) in enumerate(botones):
+            fila_boton = i // 4
+            columna_boton = i % 4
+
+            if valor == "clear":
+                comando = self.limpiar_funcion_lagrange
+                color = "#dc2626"
+                hover = "#b91c1c"
+            elif valor == "back":
+                comando = self.borrar_funcion_lagrange
+                color = "#0ea5e9"
+                hover = "#0284c7"
+            else:
+                comando = lambda v=valor: self.insertar_funcion_lagrange(v)
+                color = "#1a1f2b"
+                hover = "#243044"
+
+            ctk.CTkButton(
+                calculadora,
+                text=texto,
+                command=comando,
+                height=42,
+                corner_radius=9,
+                fg_color=color,
+                hover_color=hover,
+                border_width=1,
+                border_color="#343c4c",
+                text_color="#ffffff",
+                font=("Arial", 14, "bold"),
+            ).grid(row=fila_boton, column=columna_boton, padx=6, pady=6, sticky="ew")
+
+    def insertar_funcion_lagrange(self, texto):
+        self.lag_funcion.insert("end", texto)
+        self.lag_funcion.focus()
+
+    def limpiar_funcion_lagrange(self):
+        self.lag_funcion.delete(0, "end")
+        self.lag_funcion.focus()
+
+    def borrar_funcion_lagrange(self):
+        texto = self.lag_funcion.get()
+        self.lag_funcion.delete(0, "end")
+        self.lag_funcion.insert(0, texto[:-1])
+        self.lag_funcion.focus()
+
+    def crear_tabla_puntos_lagrange(self):
+        for widget in self.lag_puntos_frame.winfo_children():
+            widget.destroy()
+
+        self.lag_x_entries = []
+        self.lag_y_labels = []
+
+        try:
+            n = int(self.lag_num_puntos.get())
+
+            if n < 2:
+                raise ValueError("Necesitas al menos 2 puntos.")
+
+            if n > 20:
+                raise ValueError("Para que se vea bien, usa máximo 20 puntos.")
+
+            encabezados = ["i", "xᵢ", "yᵢ = f(xᵢ)"]
+            for columna, texto in enumerate(encabezados):
+                ctk.CTkLabel(
+                    self.lag_puntos_frame,
+                    text=texto,
+                    font=("Arial", 13, "bold"),
+                    text_color="#ffffff",
+                    fg_color="#1f2937",
+                    corner_radius=6,
+                    height=30,
+                ).grid(row=0, column=columna, padx=5, pady=(12, 6), sticky="ew")
+
+            for i in range(n):
+                ctk.CTkLabel(
+                    self.lag_puntos_frame,
+                    text=str(i),
+                    font=("Arial", 13, "bold"),
+                    text_color="#dbeafe",
+                    fg_color="#101216",
+                    corner_radius=6,
+                    height=34,
+                ).grid(row=i + 1, column=0, padx=5, pady=4, sticky="ew")
+
+                entrada_x = ctk.CTkEntry(
+                    self.lag_puntos_frame,
+                    placeholder_text=f"x{i}",
+                    height=34,
+                    corner_radius=8,
+                    fg_color="#0f141b",
+                    border_color="#344054",
+                    text_color="#ffffff",
+                    font=("Arial", 13),
+                )
+                entrada_x.grid(row=i + 1, column=1, padx=5, pady=4, sticky="ew")
+
+                label_y = ctk.CTkLabel(
+                    self.lag_puntos_frame,
+                    text="Se calcula solo",
+                    font=("Arial", 13, "bold"),
+                    text_color="#9fb0c7",
+                    fg_color="#101216",
+                    corner_radius=6,
+                    height=34,
+                )
+                label_y.grid(row=i + 1, column=2, padx=5, pady=4, sticky="ew")
+
+                self.lag_x_entries.append(entrada_x)
+                self.lag_y_labels.append(label_y)
+
+        except Exception as error:
+            ctk.CTkLabel(
+                self.lag_puntos_frame,
+                text=f"Error: {error}",
+                font=("Arial", 13, "bold"),
+                text_color="#fca5a5",
+                wraplength=540,
+                justify="left",
+            ).grid(row=0, column=0, padx=12, pady=12, sticky="w")
+
+    def limpiar_grafica_lagrange(self):
+        for widget in self.lag_grafica_frame.winfo_children():
+            widget.destroy()
+
+    def limpiar_resultado_lagrange(self):
+        for widget in self.lag_resultado_frame.winfo_children():
+            widget.destroy()
+
+    def formatear_decimal_lagrange(self, valor, decimales=6):
+        try:
+            valor_decimal = float(sp.N(valor, 15))
+            return f"{valor_decimal:.{decimales}f}"
+        except Exception:
+            try:
+                valor_decimal = float(valor)
+                return f"{valor_decimal:.{decimales}f}"
+            except Exception:
+                return str(valor)
+
+    def calcular_lagrange(self):
+        try:
+            if not self.lag_x_entries:
+                raise ValueError("Primero crea la tabla de xᵢ.")
+
+            funcion = self.lag_funcion.get()
+            valores_x = [entrada_x.get() for entrada_x in self.lag_x_entries]
+
+            datos = self.metodo_actual.calcular_detallado(
+                funcion=funcion,
+                valores_x=valores_x,
+            )
+
+            for etiqueta, punto in zip(self.lag_y_labels, datos["puntos"]):
+                etiqueta.configure(
+                    text=self.formatear_decimal_lagrange(punto[1], 6),
+                    text_color="#9fffe4",
+                )
+
+            self.dibujar_grafica_lagrange(datos)
+            self.mostrar_resultado_lagrange(datos)
+
+        except Exception as error:
+            self.mostrar_error_lagrange(str(error))
+
+    def dibujar_grafica_lagrange(self, datos):
+        self.limpiar_grafica_lagrange()
+
+        puntos = datos["puntos_float"]
+        polinomio_numpy = datos.get("polinomio_numpy", datos["funcion_numpy"])
+        funcion_original_numpy = datos.get("funcion_original_numpy")
+
+        xs_puntos = np.array([p[0] for p in puntos], dtype=float)
+        ys_puntos = np.array([p[1] for p in puntos], dtype=float)
+
+        x_min = float(np.min(xs_puntos))
+        x_max = float(np.max(xs_puntos))
+        ancho = x_max - x_min
+
+        if ancho == 0:
+            ancho = 1.0
+
+        margen_x = ancho * 0.45
+        x_ini = x_min - margen_x
+        x_fin = x_max + margen_x
+
+        xs = np.linspace(x_ini, x_fin, 900)
+
+        with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+            ys_polinomio = polinomio_numpy(xs)
+
+        ys_polinomio = np.array(ys_polinomio, dtype=float)
+        mascara = np.isfinite(ys_polinomio)
+        xs_validos = xs[mascara]
+        ys_validos = ys_polinomio[mascara]
+
+        xs_funcion_validos = np.array([])
+        ys_funcion_validos = np.array([])
+        if funcion_original_numpy is not None:
+            with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+                try:
+                    ys_funcion = funcion_original_numpy(xs)
+                except Exception:
+                    ys_funcion = np.array([funcion_original_numpy(float(valor_x)) for valor_x in xs])
+            ys_funcion = np.array(ys_funcion, dtype=float)
+            mascara_funcion = np.isfinite(ys_funcion)
+            xs_funcion_validos = xs[mascara_funcion]
+            ys_funcion_validos = ys_funcion[mascara_funcion]
+
+        valores_y = list(ys_validos) + list(ys_puntos) + list(ys_funcion_validos)
+        valores_y = np.array(valores_y, dtype=float)
+        valores_y = valores_y[np.isfinite(valores_y)]
+
+        if len(valores_y) == 0:
+            y_min, y_max = -1, 1
+        else:
+            y_min = float(np.min(valores_y))
+            y_max = float(np.max(valores_y))
+
+        if y_min == y_max:
+            y_min -= 1
+            y_max += 1
+
+        margen_y = abs(y_max - y_min) * 0.20
+        y_min -= margen_y
+        y_max += margen_y
+
+        figura = Figure(figsize=(7.4, 3.8), dpi=100)
+        figura.patch.set_facecolor("#151a22")
+
+        eje = figura.add_subplot(111)
+        eje.set_facecolor("#101216")
+
+        # Primero se dibuja el polinomio interpolante.
+        # Luego se dibuja encima la función original para que no quede escondida.
+        eje.plot(
+            xs_validos,
+            ys_validos,
+            linewidth=2,
+            color="#7cc7ff",
+            label="P(x) interpolante",
+            zorder=2,
+        )
+
+        if len(xs_funcion_validos) > 0:
+            eje.plot(
+                xs_funcion_validos,
+                ys_funcion_validos,
+                linewidth=3,
+                linestyle="--",
+                color="#ff4fd8",
+                label="f(x) original",
+                zorder=4,
+            )
+
+        eje.scatter(xs_puntos, ys_puntos, color="#f28c28", s=80, label="(xᵢ, f(xᵢ))", zorder=6)
+
+        for i, (xi, yi) in enumerate(puntos):
+            eje.annotate(
+                f"P{i}",
+                (xi, yi),
+                textcoords="offset points",
+                xytext=(0, 10),
+                ha="center",
+                color="#f28c28",
+                fontsize=11,
+                fontweight="bold",
+            )
+
+        eje.axhline(0, color="#ffffff", linewidth=1, alpha=0.60)
+        if x_ini <= 0 <= x_fin:
+            eje.axvline(0, color="#ffffff", linewidth=1, alpha=0.25)
+
+        eje.set_xlim(x_ini, x_fin)
+        eje.set_ylim(y_min, y_max)
+        eje.grid(True, alpha=0.25)
+        eje.tick_params(colors="#dbeafe")
+        eje.ticklabel_format(useOffset=False)
+
+        eje.spines["bottom"].set_color("#64748b")
+        eje.spines["top"].set_color("#64748b")
+        eje.spines["left"].set_color("#64748b")
+        eje.spines["right"].set_color("#64748b")
+
+        eje.set_title("Comparación: función original vs polinomio de Lagrange", color="#ffffff", fontsize=13, fontweight="bold")
+        eje.set_xlabel("x", color="#dbeafe")
+        eje.set_ylabel("f(x) / P(x)", color="#dbeafe")
+
+        leyenda = eje.legend()
+        if leyenda:
+            leyenda.get_frame().set_facecolor("#151a22")
+            leyenda.get_frame().set_edgecolor("#344054")
+            for texto in leyenda.get_texts():
+                texto.set_color("#ffffff")
+
+        figura.tight_layout()
+
+        canvas = FigureCanvasTkAgg(figura, master=self.lag_grafica_frame)
+        canvas.draw()
+        canvas.get_tk_widget().grid(row=0, column=0, padx=12, pady=12, sticky="nsew")
+
+    def mostrar_resultado_lagrange(self, datos):
+        self.limpiar_resultado_lagrange()
+        self.lag_resultado_frame.grid_columnconfigure(0, weight=1)
+
+        tarjeta = ctk.CTkFrame(
+            self.lag_resultado_frame,
+            fg_color="#172238",
+            corner_radius=10,
+            border_width=1,
+            border_color="#24344f",
+        )
+        tarjeta.grid(row=0, column=0, padx=14, pady=(14, 12), sticky="ew")
+        tarjeta.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            tarjeta,
+            text="Polinomio interpolante",
+            font=("Arial", 13, "bold"),
+            text_color="#7cc7ff",
+        ).grid(row=0, column=0, padx=16, pady=(12, 4), sticky="w")
+
+        ctk.CTkLabel(
+            tarjeta,
+            text=f"f(x) = {datos.get('funcion_texto', '')}",
+            font=("Arial", 13, "bold"),
+            text_color="#ffffff",
+            wraplength=760,
+            justify="left",
+        ).grid(row=1, column=0, padx=16, pady=(0, 8), sticky="w")
+
+        ctk.CTkLabel(
+            tarjeta,
+            text=f"P(x) = {datos['polinomio_texto']}",
+            font=("Arial", 18, "bold"),
+            text_color="#9fffe4",
+            wraplength=760,
+            justify="left",
+        ).grid(row=2, column=0, padx=16, pady=(0, 8), sticky="w")
+
+        ctk.CTkLabel(
+            tarjeta,
+            text=f"Forma factorizada: {datos['polinomio_factorizado_texto']}",
+            font=("Arial", 13, "bold"),
+            text_color="#ffffff",
+            wraplength=760,
+            justify="left",
+        ).grid(row=3, column=0, padx=16, pady=(0, 8), sticky="w")
+
+        ctk.CTkLabel(
+            tarjeta,
+            text="La gráfica compara automáticamente f(x) original contra P(x) interpolante.",
+            font=("Arial", 13, "bold"),
+            text_color="#ffffff",
+            wraplength=760,
+            justify="left",
+        ).grid(row=4, column=0, padx=16, pady=(0, 12), sticky="w")
+
+        tabla = ctk.CTkFrame(
+            self.lag_resultado_frame,
+            fg_color="#101216",
+            corner_radius=12,
+            border_width=1,
+            border_color="#303846",
+        )
+        tabla.grid(row=1, column=0, padx=14, pady=(0, 14), sticky="ew")
+
+        encabezados = ["i", "xᵢ", "yᵢ=f(xᵢ)", "Lᵢ(x) resultante"]
+
+        for columna, texto in enumerate(encabezados):
+            ctk.CTkLabel(
+                tabla,
+                text=texto,
+                font=("Arial", 12, "bold"),
+                text_color="#ffffff",
+                fg_color="#1f2937",
+                corner_radius=6,
+                width=150,
+                height=30,
+            ).grid(row=0, column=columna, padx=3, pady=4, sticky="ew")
+
+        for fila_indice, fila in enumerate(datos["tabla"], start=1):
+            valores = [
+                fila["i"],
+                self.formatear_decimal_lagrange(fila["xi"], 6),
+                self.formatear_decimal_lagrange(fila["yi"], 6),
+                fila.get("Li_producto_texto", sp.sstr(sp.simplify(fila["Li"]))),
+            ]
+
+            for columna, valor in enumerate(valores):
+                ctk.CTkLabel(
+                    tabla,
+                    text=str(valor),
+                    font=("Arial", 12),
+                    text_color="#e8edf7",
+                    fg_color="#151a22",
+                    corner_radius=6,
+                    width=150,
+                    height=28,
+                    wraplength=260,
+                ).grid(row=fila_indice, column=columna, padx=3, pady=3, sticky="ew")
+
+        procedimiento = ctk.CTkTextbox(
+            self.lag_resultado_frame,
+            height=260,
+            wrap="word",
+            corner_radius=12,
+            fg_color="#101216",
+            border_width=1,
+            border_color="#303846",
+            text_color="#e8edf7",
+            font=("Consolas", 13),
+        )
+        procedimiento.grid(row=2, column=0, padx=14, pady=(0, 18), sticky="ew")
+
+        texto = ""
+        texto += "Fórmula general:\n"
+        texto += "P(x) = Σ y_i L_i(x)\n"
+        texto += "y_i = f(x_i)\n"
+        texto += "L_i(x) = Π (x - x_j)/(x_i - x_j), con j ≠ i\n\n"
+
+        texto += "Evaluaciones:\n"
+
+        for fila in datos["tabla"]:
+            xi_decimal = self.formatear_decimal_lagrange(fila["xi"], 6)
+            yi_decimal = self.formatear_decimal_lagrange(fila["yi"], 6)
+            texto += f"y_{fila['i']} = f({xi_decimal}) = {yi_decimal}\n"
+
+        texto += "\nBases Lᵢ(x) resultantes:\n"
+
+        for fila in datos["tabla"]:
+            texto += f"L_{fila['i']}(x) = {fila.get('Li_producto_texto', sp.sstr(sp.simplify(fila['Li'])))}\n"
+            if "Li_expandido_texto" in fila:
+                texto += f"L_{fila['i']}(x) expandido = {fila['Li_expandido_texto']}\n"
+            texto += "\n"
+
+        texto += f"Polinomio expandido:\nP(x) = {datos['polinomio_texto']}\n"
+
+        procedimiento.insert("1.0", texto)
+        procedimiento.configure(state="disabled")
+
+    def mostrar_error_lagrange(self, mensaje):
+        self.limpiar_resultado_lagrange()
+
+        ctk.CTkLabel(
+            self.lag_resultado_frame,
+            text="No se pudo calcular",
+            font=("Arial", 18, "bold"),
+            text_color="#ffffff",
+        ).grid(row=0, column=0, padx=18, pady=(18, 6), sticky="w")
+
+        ctk.CTkLabel(
+            self.lag_resultado_frame,
+            text=mensaje,
+            font=("Arial", 14),
+            text_color="#fca5a5",
+            wraplength=620,
+            justify="left",
+        ).grid(row=1, column=0, padx=18, pady=(0, 18), sticky="w")
+
+
+    # =========================================================
+    # PANTALLA ESPECIAL: DIFERENCIAS DIVIDIDAS
+    # =========================================================
+
+    def mostrar_diferencias_divididas(self):
+        self.limpiar_pantalla()
+
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)
+
+        encabezado = ctk.CTkFrame(
+            self,
+            fg_color="#102d52",
+            corner_radius=0,
+            border_width=0,
+        )
+        encabezado.grid(row=0, column=0, sticky="ew")
+        encabezado.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkButton(
+            encabezado,
+            text="← Inicio",
+            command=self.mostrar_inicio,
+            width=110,
+            height=34,
+            fg_color="#1a1f2b",
+            hover_color="#243044",
+            border_width=1,
+            border_color="#496386",
+        ).grid(row=0, column=0, padx=22, pady=18, sticky="w")
+
+        self.crear_label(
+            encabezado,
+            "Diferencias divididas",
+            tamano=26,
+            peso="bold",
+            color="#ffffff",
+        ).grid(row=0, column=1, padx=10, pady=18, sticky="w")
+
+        cuerpo = ctk.CTkFrame(self, fg_color="transparent")
+        cuerpo.grid(row=1, column=0, padx=28, pady=24, sticky="nsew")
+        cuerpo.grid_columnconfigure(0, weight=1)
+        cuerpo.grid_columnconfigure(1, weight=2)
+        cuerpo.grid_rowconfigure(0, weight=1)
+
+        panel_entrada = ctk.CTkScrollableFrame(
+            cuerpo,
+            fg_color="#101216",
+            corner_radius=16,
+            border_width=1,
+            border_color="#303846",
+        )
+        panel_entrada.grid(row=0, column=0, padx=(0, 10), pady=0, sticky="nsew")
+        panel_entrada.grid_columnconfigure(0, weight=1)
+
+        panel_resultado = ctk.CTkFrame(
+            cuerpo,
+            fg_color="#101216",
+            corner_radius=16,
+            border_width=1,
+            border_color="#303846",
+        )
+        panel_resultado.grid(row=0, column=1, padx=(10, 0), pady=0, sticky="nsew")
+        panel_resultado.grid_columnconfigure(0, weight=1)
+        panel_resultado.grid_rowconfigure(2, weight=1)
+
+        self.dd_resultado_panel = panel_resultado
+
+        self.crear_label(
+            panel_entrada,
+            "DATOS DE ENTRADA",
+            tamano=11,
+            peso="bold",
+            color="#75b8ff",
+        ).grid(row=0, column=0, padx=22, pady=(22, 0), sticky="w")
+
+        self.crear_label(
+            panel_entrada,
+            "Escribe f(x), define los puntos xᵢ y calcula la tabla de diferencias divididas.",
+            tamano=18,
+            peso="bold",
+            color="#ffffff",
+        ).grid(row=1, column=0, padx=22, pady=(4, 16), sticky="w")
+
+        self.dd_funcion = self.crear_input_dd(
+            panel_entrada,
+            2,
+            "Función f(x)",
+            "Ejemplo: 3*x**2*sin(x)"
+        )
+
+        self.construir_calculadora_dd(panel_entrada, 4)
+
+        self.dd_modo_fijo = "Adelante"
+
+        self.dd_cantidad = self.crear_input_dd(
+            panel_entrada,
+            5,
+            "Cantidad de puntos xᵢ",
+            "Ejemplo: 6"
+        )
+
+        ctk.CTkButton(
+            panel_entrada,
+            text="Crear tabla de xᵢ",
+            command=self.crear_tabla_x_dd,
+            height=40,
+            corner_radius=10,
+            font=("Arial", 14, "bold"),
+            fg_color="#1f6feb",
+            hover_color="#1959bd",
+        ).grid(row=7, column=0, padx=22, pady=(10, 12), sticky="ew")
+
+        self.dd_puntos_frame = ctk.CTkScrollableFrame(
+            panel_entrada,
+            fg_color="#151a22",
+            corner_radius=12,
+            border_width=1,
+            border_color="#2a3342",
+            height=180,
+        )
+        self.dd_puntos_frame.grid(row=8, column=0, padx=22, pady=(0, 14), sticky="ew")
+        self.dd_puntos_frame.grid_columnconfigure(0, weight=0)
+        self.dd_puntos_frame.grid_columnconfigure(1, weight=1)
+        self.dd_puntos_frame.grid_columnconfigure(2, weight=1)
+
+        self.crear_label(
+            self.dd_puntos_frame,
+            "Crea la tabla y escribe los valores xᵢ. Los yᵢ=f(xᵢ) se calculan solos.",
+            tamano=13,
+            color="#cbd5e1",
+        ).grid(row=0, column=0, columnspan=3, padx=12, pady=12, sticky="w")
+
+        self.dd_x_entries = []
+        self.dd_y_labels = []
+
+        ctk.CTkButton(
+            panel_entrada,
+            text="Evaluar yᵢ y calcular polinomio",
+            command=self.calcular_diferencias_divididas,
+            height=44,
+            corner_radius=10,
+            font=("Arial", 15, "bold"),
+            fg_color="#159a73",
+            hover_color="#0f7a5d",
+        ).grid(row=11, column=0, padx=22, pady=(0, 24), sticky="ew")
+
+        self.crear_label(
+            panel_resultado,
+            "GRÁFICA",
+            tamano=11,
+            peso="bold",
+            color="#75b8ff",
+        ).grid(row=0, column=0, padx=22, pady=(22, 0), sticky="w")
+
+        self.dd_grafica_frame = ctk.CTkFrame(
+            panel_resultado,
+            fg_color="#151a22",
+            corner_radius=12,
+            border_width=1,
+            border_color="#2a3342",
+        )
+        self.dd_grafica_frame.grid(row=1, column=0, padx=22, pady=(10, 14), sticky="ew")
+        self.dd_grafica_frame.grid_columnconfigure(0, weight=1)
+
+        self.crear_label(
+            self.dd_grafica_frame,
+            "Aquí aparecerá f(x), P(x) y los puntos usados.",
+            tamano=14,
+            color="#cbd5e1",
+        ).grid(row=0, column=0, padx=18, pady=18, sticky="w")
+
+        self.dd_tabla_frame = ctk.CTkScrollableFrame(
+            panel_resultado,
+            fg_color="#151a22",
+            corner_radius=12,
+            border_width=1,
+            border_color="#2a3342",
+        )
+        self.dd_tabla_frame.grid(row=2, column=0, padx=22, pady=(0, 22), sticky="nsew")
+        self.dd_tabla_frame.grid_columnconfigure(0, weight=1)
+
+        self.crear_label(
+            self.dd_tabla_frame,
+            "Aquí aparecerá la tabla de diferencias divididas y el polinomio.",
+            tamano=14,
+            color="#cbd5e1",
+        ).grid(row=0, column=0, padx=18, pady=18, sticky="w")
+
+    def crear_input_dd(self, padre, fila, texto, placeholder=""):
+        ctk.CTkLabel(
+            padre,
+            text=texto,
+            font=("Arial", 13, "bold"),
+            text_color="#f1f5ff",
+        ).grid(row=fila, column=0, padx=22, pady=(10, 4), sticky="w")
+
+        entrada = ctk.CTkEntry(
+            padre,
+            placeholder_text=placeholder,
+            height=38,
+            corner_radius=9,
+            fg_color="#0f141b",
+            border_color="#344054",
+            text_color="#ffffff",
+            font=("Arial", 14),
+        )
+        entrada.grid(row=fila + 1, column=0, padx=22, pady=(0, 8), sticky="ew")
+        return entrada
+
+    def construir_calculadora_dd(self, padre, fila):
+        calculadora = ctk.CTkFrame(
+            padre,
+            fg_color="#151a22",
+            corner_radius=14,
+            border_width=1,
+            border_color="#2a3342",
+        )
+        calculadora.grid(row=fila, column=0, padx=22, pady=(8, 10), sticky="ew")
+
+        for columna in range(4):
+            calculadora.grid_columnconfigure(columna, weight=1)
+
+        botones = [
+            ("x", "x"), ("sin", "sin("), ("cos", "cos("), ("C", "clear"),
+            ("+", "+"), ("-", "-"), ("×", "*"), ("÷", "/"),
+            ("x²", "**2"), ("xʸ", "**"), ("eˣ", "exp("), ("ln", "log("),
+            ("(", "("), (")", ")"), ("π", "pi"), ("⌫", "back"),
+        ]
+
+        for i, (texto, valor) in enumerate(botones):
+            fila_boton = i // 4
+            columna_boton = i % 4
+
+            if valor == "clear":
+                comando = self.limpiar_funcion_dd
+                color = "#dc2626"
+                hover = "#b91c1c"
+            elif valor == "back":
+                comando = self.borrar_funcion_dd
+                color = "#0ea5e9"
+                hover = "#0284c7"
+            else:
+                comando = lambda v=valor: self.insertar_funcion_dd(v)
+                color = "#1a1f2b"
+                hover = "#243044"
+
+            ctk.CTkButton(
+                calculadora,
+                text=texto,
+                command=comando,
+                height=42,
+                corner_radius=9,
+                fg_color=color,
+                hover_color=hover,
+                border_width=1,
+                border_color="#343c4c",
+                text_color="#ffffff",
+                font=("Arial", 14, "bold"),
+            ).grid(row=fila_boton, column=columna_boton, padx=6, pady=6, sticky="ew")
+
+    def insertar_funcion_dd(self, texto):
+        self.dd_funcion.insert("end", texto)
+        self.dd_funcion.focus()
+
+    def limpiar_funcion_dd(self):
+        self.dd_funcion.delete(0, "end")
+        self.dd_funcion.focus()
+
+    def borrar_funcion_dd(self):
+        texto = self.dd_funcion.get()
+        self.dd_funcion.delete(0, "end")
+        self.dd_funcion.insert(0, texto[:-1])
+        self.dd_funcion.focus()
+
+    def crear_tabla_x_dd(self):
+        for widget in self.dd_puntos_frame.winfo_children():
+            widget.destroy()
+
+        self.dd_x_entries = []
+        self.dd_y_labels = []
+
+        try:
+            cantidad = int(self.dd_cantidad.get())
+
+            if cantidad < 2:
+                raise ValueError("Necesitas al menos 2 puntos.")
+
+            if cantidad > 12:
+                raise ValueError("Para que la tabla se vea bien, usa máximo 12 puntos.")
+
+            encabezados = ["i", "xᵢ", "yᵢ = f(xᵢ)"]
+            for columna, texto in enumerate(encabezados):
+                ctk.CTkLabel(
+                    self.dd_puntos_frame,
+                    text=texto,
+                    font=("Arial", 12, "bold"),
+                    text_color="#ffffff",
+                    fg_color="#1f2937",
+                    corner_radius=6,
+                    height=28,
+                ).grid(row=0, column=columna, padx=4, pady=6, sticky="ew")
+
+            for i in range(cantidad):
+                ctk.CTkLabel(
+                    self.dd_puntos_frame,
+                    text=str(i),
+                    font=("Arial", 12, "bold"),
+                    text_color="#ffffff",
+                    fg_color="#101216",
+                    corner_radius=6,
+                    width=44,
+                    height=32,
+                ).grid(row=i + 1, column=0, padx=4, pady=4, sticky="ew")
+
+                entrada = ctk.CTkEntry(
+                    self.dd_puntos_frame,
+                    height=32,
+                    corner_radius=8,
+                    fg_color="#0f141b",
+                    border_color="#344054",
+                    text_color="#ffffff",
+                    font=("Arial", 13),
+                )
+                entrada.grid(row=i + 1, column=1, padx=4, pady=4, sticky="ew")
+                self.dd_x_entries.append(entrada)
+
+                etiqueta_y = ctk.CTkLabel(
+                    self.dd_puntos_frame,
+                    text="—",
+                    font=("Arial", 12, "bold"),
+                    text_color="#9fffe4",
+                    fg_color="#101216",
+                    corner_radius=6,
+                    height=32,
+                )
+                etiqueta_y.grid(row=i + 1, column=2, padx=4, pady=4, sticky="ew")
+                self.dd_y_labels.append(etiqueta_y)
+
+        except Exception as error:
+            ctk.CTkLabel(
+                self.dd_puntos_frame,
+                text=f"Error: {error}",
+                font=("Arial", 13, "bold"),
+                text_color="#fca5a5",
+                wraplength=520,
+                justify="left",
+            ).grid(row=0, column=0, padx=12, pady=12, sticky="w")
+
+    def limpiar_grafica_dd(self):
+        for widget in self.dd_grafica_frame.winfo_children():
+            widget.destroy()
+
+    def limpiar_tabla_dd(self):
+        for widget in self.dd_tabla_frame.winfo_children():
+            widget.destroy()
+
+    def formatear_numero_dd(self, valor, decimales=6):
+        if valor is None:
+            return ""
+        try:
+            return f"{float(valor):.{decimales}f}"
+        except Exception:
+            return str(valor)
+
+    def calcular_diferencias_divididas(self):
+        try:
+            if not self.dd_x_entries:
+                raise ValueError("Primero crea la tabla de xᵢ.")
+
+            puntos_x = [entrada.get() for entrada in self.dd_x_entries]
+
+            datos = self.metodo_actual.calcular_detallado(
+                funcion=self.dd_funcion.get(),
+                puntos_x=puntos_x,
+                modo=self.dd_modo_fijo,
+            )
+
+            for etiqueta, yi in zip(self.dd_y_labels, datos["puntos_y_originales"]):
+                etiqueta.configure(text=self.formatear_numero_dd(yi, 6))
+
+            self.dibujar_grafica_dd(datos)
+            self.mostrar_resultado_dd(datos)
+
+        except Exception as error:
+            self.mostrar_error_dd(str(error))
+
+    def dibujar_grafica_dd(self, datos):
+        self.limpiar_grafica_dd()
+
+        puntos_x = datos["puntos_x_originales"]
+        puntos_y = datos["puntos_y_originales"]
+        funcion_numpy = datos["funcion_numpy"]
+        polinomio_numpy = datos["polinomio_numpy"]
+
+        x_min = min(puntos_x)
+        x_max = max(puntos_x)
+        ancho = x_max - x_min
+
+        if ancho == 0:
+            ancho = 1
+
+        margen = ancho * 0.45
+        x_inicio = x_min - margen
+        x_final = x_max + margen
+
+        xs = np.linspace(x_inicio, x_final, 900)
+
+        with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+            try:
+                ys_funcion = funcion_numpy(xs)
+            except Exception:
+                ys_funcion = np.array([funcion_numpy(float(valor)) for valor in xs])
+
+            try:
+                ys_polinomio = polinomio_numpy(xs)
+            except Exception:
+                ys_polinomio = np.array([polinomio_numpy(float(valor)) for valor in xs])
+
+        ys_funcion = np.array(ys_funcion, dtype=float)
+        ys_polinomio = np.array(ys_polinomio, dtype=float)
+
+        mascara_funcion = np.isfinite(ys_funcion)
+        mascara_polinomio = np.isfinite(ys_polinomio)
+
+        figura = Figure(figsize=(7.6, 3.9), dpi=100)
+        figura.patch.set_facecolor("#151a22")
+
+        eje = figura.add_subplot(111)
+        eje.set_facecolor("#101216")
+
+        eje.plot(
+            xs[mascara_polinomio],
+            ys_polinomio[mascara_polinomio],
+            linewidth=2,
+            color="#7cc7ff",
+            label="P(x) interpolante",
+            zorder=2,
+        )
+
+        eje.plot(
+            xs[mascara_funcion],
+            ys_funcion[mascara_funcion],
+            linewidth=3,
+            linestyle="--",
+            color="#ff4fd8",
+            label="f(x) original",
+            zorder=4,
+        )
+
+        eje.scatter(
+            puntos_x,
+            puntos_y,
+            s=70,
+            color="#f28c28",
+            label="(xᵢ, f(xᵢ))",
+            zorder=6,
+        )
+
+        for i, (xi, yi) in enumerate(zip(puntos_x, puntos_y)):
+            eje.annotate(
+                f"P{i}",
+                (xi, yi),
+                textcoords="offset points",
+                xytext=(0, 10),
+                ha="center",
+                color="#f28c28",
+                fontsize=11,
+                fontweight="bold",
+            )
+
+        eje.axhline(0, color="#ffffff", linewidth=1, alpha=0.65)
+
+        if x_inicio <= 0 <= x_final:
+            eje.axvline(0, color="#ffffff", linewidth=1, alpha=0.25)
+
+        valores_y = []
+        valores_y.extend(ys_funcion[mascara_funcion])
+        valores_y.extend(ys_polinomio[mascara_polinomio])
+        valores_y.extend(puntos_y)
+        valores_y = np.array(valores_y, dtype=float)
+        valores_y = valores_y[np.isfinite(valores_y)]
+
+        if len(valores_y) > 0:
+            y_min = np.min(valores_y)
+            y_max = np.max(valores_y)
+
+            if y_min == y_max:
+                y_min -= 1
+                y_max += 1
+
+            margen_y = abs(y_max - y_min) * 0.18
+            eje.set_ylim(y_min - margen_y, y_max + margen_y)
+
+        eje.set_xlim(x_inicio, x_final)
+        eje.grid(True, alpha=0.25)
+        eje.tick_params(colors="#dbeafe")
+        eje.ticklabel_format(useOffset=False)
+
+        eje.spines["bottom"].set_color("#64748b")
+        eje.spines["top"].set_color("#64748b")
+        eje.spines["left"].set_color("#64748b")
+        eje.spines["right"].set_color("#64748b")
+
+        eje.set_title("Diferencias divididas", color="#ffffff", fontsize=13, fontweight="bold")
+        eje.set_xlabel("x", color="#dbeafe")
+        eje.set_ylabel("f(x) / P(x)", color="#dbeafe")
+
+        leyenda = eje.legend()
+        if leyenda:
+            leyenda.get_frame().set_facecolor("#151a22")
+            leyenda.get_frame().set_edgecolor("#344054")
+            for texto in leyenda.get_texts():
+                texto.set_color("#ffffff")
+
+        figura.tight_layout()
+
+        canvas = FigureCanvasTkAgg(figura, master=self.dd_grafica_frame)
+        canvas.draw()
+        canvas.get_tk_widget().grid(row=0, column=0, padx=12, pady=12, sticky="nsew")
+
+    def mostrar_resultado_dd(self, datos):
+        self.limpiar_tabla_dd()
+        self.dd_tabla_frame.grid_columnconfigure(0, weight=1)
+
+        tarjeta = ctk.CTkFrame(
+            self.dd_tabla_frame,
+            fg_color="#172238",
+            corner_radius=10,
+            border_width=1,
+            border_color="#24344f",
+        )
+        tarjeta.grid(row=0, column=0, padx=14, pady=(14, 12), sticky="ew")
+        tarjeta.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            tarjeta,
+            text="Polinomio por diferencias divididas",
+            font=("Arial", 13, "bold"),
+            text_color="#7cc7ff",
+        ).grid(row=0, column=0, padx=16, pady=(12, 4), sticky="w")
+
+        ctk.CTkLabel(
+            tarjeta,
+            text=datos["polinomio_newton"],
+            font=("Consolas", 13, "bold"),
+            text_color="#ffffff",
+            wraplength=980,
+            justify="left",
+        ).grid(row=1, column=0, padx=16, pady=(0, 10), sticky="w")
+
+        ctk.CTkLabel(
+            tarjeta,
+            text="Forma expandida:",
+            font=("Arial", 13, "bold"),
+            text_color="#9fffe4",
+        ).grid(row=2, column=0, padx=16, pady=(0, 4), sticky="w")
+
+        ctk.CTkLabel(
+            tarjeta,
+            text=f"P(x) = {datos['polinomio_expandido']}",
+            font=("Consolas", 13, "bold"),
+            text_color="#9fffe4",
+            wraplength=980,
+            justify="left",
+        ).grid(row=3, column=0, padx=16, pady=(0, 12), sticky="w")
+
+        # =====================================================
+        # TABLA TIPO EXCEL / APUNTES
+        # En lugar de poner todas las diferencias en filas rectas,
+        # se colocan escalonadas como en tus apuntes:
+        # x0, x1, x2... y las diferencias entre filas.
+        # =====================================================
+        tabla = ctk.CTkFrame(
+            self.dd_tabla_frame,
+            fg_color="#101216",
+            corner_radius=12,
+            border_width=1,
+            border_color="#303846",
+        )
+        tabla.grid(row=1, column=0, padx=14, pady=(0, 14), sticky="ew")
+
+        n = len(datos["puntos_x"])
+        total_columnas = n + 2       # n, xi, f(xi), dif orden 1, ..., dif orden n-1
+        total_filas = 2 * n          # encabezado + filas escalonadas
+
+        for columna in range(total_columnas):
+            tabla.grid_columnconfigure(columna, weight=1)
+
+        def celda(padre, fila, columna, texto="", ancho=118, alto=30,
+                  color_fondo="#151a22", color_texto="#e8edf7",
+                  fuente=("Arial", 12, "bold")):
+            etiqueta = ctk.CTkLabel(
+                padre,
+                text=texto,
+                font=fuente,
+                text_color=color_texto,
+                fg_color=color_fondo,
+                corner_radius=6,
+                width=ancho,
+                height=alto,
+            )
+            etiqueta.grid(row=fila, column=columna, padx=3, pady=3, sticky="ew")
+            return etiqueta
+
+        encabezados = ["n", "xᵢ", "f(xᵢ)"]
+        for orden in range(1, n):
+            encabezados.append(f"Dif. {orden}")
+
+        for columna, texto in enumerate(encabezados):
+            celda(
+                tabla,
+                0,
+                columna,
+                texto,
+                ancho=118,
+                alto=32,
+                color_fondo="#1f2937",
+                color_texto="#ffffff",
+                fuente=("Arial", 12, "bold"),
+            )
+
+        # Crear fondo vacío para que la tabla conserve forma de hoja de cálculo.
+        for fila in range(1, total_filas):
+            for columna in range(total_columnas):
+                celda(
+                    tabla,
+                    fila,
+                    columna,
+                    "",
+                    ancho=118,
+                    alto=28,
+                    color_fondo="#0f141b",
+                    color_texto="#e8edf7",
+                    fuente=("Arial", 12, "bold"),
+                )
+
+        # Colocar xᵢ y f(xᵢ) en filas alternadas: x0, x1, x2...
+        for i, (xi, yi) in enumerate(zip(datos["puntos_x"], datos["puntos_y"])):
+            fila_visual = 1 + (2 * i)
+
+            celda(
+                tabla,
+                fila_visual,
+                0,
+                f"x{i}",
+                color_fondo="#111827",
+                color_texto="#ffffff",
+                fuente=("Arial", 12, "bold"),
+            )
+            celda(
+                tabla,
+                fila_visual,
+                1,
+                self.formatear_numero_dd(xi, 6),
+                color_fondo="#111827",
+                color_texto="#ffffff",
+                fuente=("Arial", 12, "bold"),
+            )
+            es_fx0 = (i == 0)
+            celda(
+                tabla,
+                fila_visual,
+                2,
+                self.formatear_numero_dd(yi, 8),
+                color_fondo="#172238" if es_fx0 else "#111827",
+                color_texto="#9fffe4" if es_fx0 else "#ffffff",
+                fuente=ctk.CTkFont(family="Arial", size=12, weight="bold", underline=True) if es_fx0 else ("Arial", 12, "bold"),
+            )
+
+        # Colocar diferencias divididas en diagonal/escalón.
+        # tabla[i][orden] corresponde a f[xᵢ, ..., xᵢ₊orden].
+        tabla_diferencias = datos["tabla"]
+        for orden in range(1, n):
+            for i in range(n - orden):
+                valor = tabla_diferencias[i][orden]
+                fila_visual = 1 + (2 * i) + orden
+                columna_visual = 2 + orden
+
+                # En Newton hacia adelante/atrás los coeficientes usados son la fila superior
+                # de la tabla ordenada, por eso se resaltan en verde agua.
+                es_coeficiente = (i == 0)
+                color_texto = "#9fffe4" if es_coeficiente else "#ffffff"
+                color_fondo = "#172238" if es_coeficiente else "#111827"
+
+                celda(
+                    tabla,
+                    fila_visual,
+                    columna_visual,
+                    self.formatear_numero_dd(valor, 8),
+                    color_fondo=color_fondo,
+                    color_texto=color_texto,
+                    fuente=("Arial", 12, "bold"),
+                )
+
+        # Coeficientes usados en el polinomio
+        coef_frame = ctk.CTkFrame(
+            self.dd_tabla_frame,
+            fg_color="#101216",
+            corner_radius=12,
+            border_width=1,
+            border_color="#303846",
+        )
+        coef_frame.grid(row=2, column=0, padx=14, pady=(0, 14), sticky="ew")
+        coef_frame.grid_columnconfigure(0, weight=1)
+
+        texto_coef = "Coeficientes resaltados: "
+        texto_coef += ", ".join(
+            [f"a{i} = {self.formatear_numero_dd(coef, 8)}" for i, coef in enumerate(datos["coeficientes"])]
+        )
+
+        ctk.CTkLabel(
+            coef_frame,
+            text=texto_coef,
+            font=("Consolas", 13, "bold"),
+            text_color="#ffffff",
+            wraplength=980,
+            justify="left",
+        ).grid(row=0, column=0, padx=14, pady=14, sticky="w")
+
+    def mostrar_error_dd(self, mensaje):
+        self.limpiar_tabla_dd()
+
+        ctk.CTkLabel(
+            self.dd_tabla_frame,
+            text="No se pudo calcular",
+            font=("Arial", 18, "bold"),
+            text_color="#ffffff",
+        ).grid(row=0, column=0, padx=18, pady=(18, 6), sticky="w")
+
+        ctk.CTkLabel(
+            self.dd_tabla_frame,
+            text=mensaje,
+            font=("Arial", 14),
+            text_color="#fca5a5",
+            wraplength=720,
             justify="left",
         ).grid(row=1, column=0, padx=18, pady=(0, 18), sticky="w")
 
