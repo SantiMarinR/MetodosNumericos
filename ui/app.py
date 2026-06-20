@@ -340,6 +340,18 @@ class App(ctk.CTk):
             self.mostrar_biseccion()
             return
 
+        if (
+            self.normalizar(nombre_metodo) == self.normalizar("Falsa Posición")
+            or self.normalizar(nombre_metodo) == self.normalizar("Falsa posicion")
+            or self.normalizar(nombre_metodo) == self.normalizar("Falsa posición")
+        ):
+            self.mostrar_falsa_posicion()
+            return
+
+        if self.normalizar(nombre_metodo) == self.normalizar("Secante"):
+            self.mostrar_secante()
+            return
+
         self.mostrar_pantalla_metodo()
 
     def mostrar_error_metodo(self, nombre_metodo):
@@ -1677,6 +1689,1235 @@ class App(ctk.CTk):
 
         ctk.CTkLabel(
             self.bis_tabla_frame,
+            text=mensaje,
+            font=("Arial", 14),
+            text_color="#fca5a5",
+            wraplength=620,
+            justify="left",
+        ).grid(row=1, column=0, padx=18, pady=(0, 18), sticky="w")
+
+
+    # =========================================================
+    # PANTALLA ESPECIAL: FALSA POSICION
+    # =========================================================
+
+    def mostrar_falsa_posicion(self):
+        self.limpiar_pantalla()
+
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)
+
+        encabezado = ctk.CTkFrame(
+            self,
+            fg_color="#102d52",
+            corner_radius=0,
+            border_width=0,
+        )
+        encabezado.grid(row=0, column=0, sticky="ew")
+        encabezado.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkButton(
+            encabezado,
+            text="← Inicio",
+            command=self.mostrar_inicio,
+            width=110,
+            height=34,
+            fg_color="#1a1f2b",
+            hover_color="#243044",
+            border_width=1,
+            border_color="#496386",
+        ).grid(row=0, column=0, padx=22, pady=18, sticky="w")
+
+        self.crear_label(
+            encabezado,
+            "Falsa Posición",
+            tamano=26,
+            peso="bold",
+            color="#ffffff",
+        ).grid(row=0, column=1, padx=10, pady=18, sticky="w")
+
+        cuerpo = ctk.CTkFrame(self, fg_color="transparent")
+        cuerpo.grid(row=1, column=0, padx=28, pady=24, sticky="nsew")
+        cuerpo.grid_columnconfigure(0, weight=1)
+        cuerpo.grid_columnconfigure(1, weight=1)
+        cuerpo.grid_rowconfigure(0, weight=1)
+
+        panel_entrada = ctk.CTkScrollableFrame(
+            cuerpo,
+            fg_color="#101216",
+            corner_radius=16,
+            border_width=1,
+            border_color="#303846",
+        )
+        panel_entrada.grid(row=0, column=0, padx=(0, 10), pady=0, sticky="nsew")
+        panel_entrada.grid_columnconfigure(0, weight=1)
+
+        panel_resultado = ctk.CTkFrame(
+            cuerpo,
+            fg_color="#101216",
+            corner_radius=16,
+            border_width=1,
+            border_color="#303846",
+        )
+        panel_resultado.grid(row=0, column=1, padx=(10, 0), pady=0, sticky="nsew")
+        panel_resultado.grid_columnconfigure(0, weight=1)
+        panel_resultado.grid_rowconfigure(2, weight=1)
+
+        self.fp_resultado_panel = panel_resultado
+
+        self.crear_label(
+            panel_entrada,
+            "DATOS DE ENTRADA",
+            tamano=11,
+            peso="bold",
+            color="#75b8ff",
+        ).grid(row=0, column=0, padx=22, pady=(22, 0), sticky="w")
+
+        self.crear_label(
+            panel_entrada,
+            "Construye la función, define el intervalo y ejecuta el método.",
+            tamano=18,
+            peso="bold",
+            color="#ffffff",
+        ).grid(row=1, column=0, padx=22, pady=(4, 16), sticky="w")
+
+        self.fp_funcion = self.crear_input_falsa_posicion(
+            panel_entrada,
+            2,
+            "Función f(x)",
+            "Ejemplo: x**3 - x - 2"
+        )
+
+        self.construir_calculadora_falsa_posicion(panel_entrada, 4)
+
+        datos_intervalo = ctk.CTkFrame(panel_entrada, fg_color="transparent")
+        datos_intervalo.grid(row=5, column=0, padx=22, pady=(12, 4), sticky="ew")
+        datos_intervalo.grid_columnconfigure(0, weight=1)
+        datos_intervalo.grid_columnconfigure(1, weight=1)
+        datos_intervalo.grid_columnconfigure(2, weight=1)
+
+        self.fp_a = self.crear_input_falsa_posicion_chico(datos_intervalo, 0, "Límite a", "1")
+        self.fp_b = self.crear_input_falsa_posicion_chico(datos_intervalo, 1, "Límite b", "2")
+        self.fp_error = self.crear_input_falsa_posicion_chico(datos_intervalo, 2, "Error máximo", "0.001")
+
+        ctk.CTkButton(
+            panel_entrada,
+            text="Graficar función",
+            command=self.graficar_falsa_posicion_desde_formulario,
+            height=40,
+            corner_radius=10,
+            font=("Arial", 14, "bold"),
+            fg_color="#159a73",
+            hover_color="#0f7a5d",
+        ).grid(row=6, column=0, padx=22, pady=(12, 8), sticky="ew")
+
+        ctk.CTkButton(
+            panel_entrada,
+            text="Calcular falsa posición",
+            command=self.calcular_falsa_posicion,
+            height=44,
+            corner_radius=10,
+            font=("Arial", 15, "bold"),
+            fg_color="#1f6feb",
+            hover_color="#1959bd",
+        ).grid(row=7, column=0, padx=22, pady=(0, 24), sticky="ew")
+
+        self.crear_label(
+            panel_resultado,
+            "GRÁFICA",
+            tamano=11,
+            peso="bold",
+            color="#75b8ff",
+        ).grid(row=0, column=0, padx=22, pady=(22, 0), sticky="w")
+
+        self.fp_grafica_frame = ctk.CTkFrame(
+            panel_resultado,
+            fg_color="#151a22",
+            corner_radius=12,
+            border_width=1,
+            border_color="#2a3342",
+        )
+        self.fp_grafica_frame.grid(row=1, column=0, padx=22, pady=(10, 14), sticky="ew")
+        self.fp_grafica_frame.grid_columnconfigure(0, weight=1)
+
+        self.crear_label(
+            self.fp_grafica_frame,
+            "Aquí aparecerá la gráfica de f(x) con los puntos a, b y c.",
+            tamano=14,
+            color="#cbd5e1",
+        ).grid(row=0, column=0, padx=18, pady=18, sticky="w")
+
+        self.fp_tabla_frame = ctk.CTkScrollableFrame(
+            panel_resultado,
+            fg_color="#151a22",
+            corner_radius=12,
+            border_width=1,
+            border_color="#2a3342",
+        )
+        self.fp_tabla_frame.grid(row=2, column=0, padx=22, pady=(0, 22), sticky="nsew")
+        self.fp_tabla_frame.grid_columnconfigure(0, weight=1)
+
+        self.crear_label(
+            self.fp_tabla_frame,
+            "Aquí aparecerá la tabla de iteraciones.",
+            tamano=14,
+            color="#cbd5e1",
+        ).grid(row=0, column=0, padx=18, pady=18, sticky="w")
+
+    def crear_input_falsa_posicion(self, padre, fila, texto, placeholder=""):
+        ctk.CTkLabel(
+            padre,
+            text=texto,
+            font=("Arial", 13, "bold"),
+            text_color="#f1f5ff",
+        ).grid(row=fila, column=0, padx=22, pady=(10, 4), sticky="w")
+
+        entrada = ctk.CTkEntry(
+            padre,
+            placeholder_text=placeholder,
+            height=38,
+            corner_radius=9,
+            fg_color="#0f141b",
+            border_color="#344054",
+            text_color="#ffffff",
+            font=("Arial", 14),
+        )
+        entrada.grid(row=fila + 1, column=0, padx=22, pady=(0, 8), sticky="ew")
+        return entrada
+
+    def crear_input_falsa_posicion_chico(self, padre, columna, texto, placeholder=""):
+        contenedor = ctk.CTkFrame(padre, fg_color="transparent")
+        contenedor.grid(row=0, column=columna, padx=6, pady=0, sticky="ew")
+        contenedor.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            contenedor,
+            text=texto,
+            font=("Arial", 13, "bold"),
+            text_color="#f1f5ff",
+        ).grid(row=0, column=0, pady=(0, 4), sticky="w")
+
+        entrada = ctk.CTkEntry(
+            contenedor,
+            placeholder_text=placeholder,
+            height=36,
+            corner_radius=9,
+            fg_color="#0f141b",
+            border_color="#344054",
+            text_color="#ffffff",
+            font=("Arial", 13),
+        )
+        entrada.grid(row=1, column=0, sticky="ew")
+        return entrada
+
+    def construir_calculadora_falsa_posicion(self, padre, fila):
+        calculadora = ctk.CTkFrame(
+            padre,
+            fg_color="#151a22",
+            corner_radius=14,
+            border_width=1,
+            border_color="#2a3342",
+        )
+        calculadora.grid(row=fila, column=0, padx=22, pady=(8, 10), sticky="ew")
+
+        for columna in range(4):
+            calculadora.grid_columnconfigure(columna, weight=1)
+
+        botones = [
+            ("x", "x"), ("sin", "sin("), ("cos", "cos("), ("C", "clear"),
+            ("+", "+"), ("-", "-"), ("×", "*"), ("÷", "/"),
+            ("x²", "**2"), ("xʸ", "**"), ("eˣ", "exp("), ("ln", "log("),
+            ("(", "("), (")", ")"), ("π", "pi"), ("⌫", "back"),
+        ]
+
+        for i, (texto, valor) in enumerate(botones):
+            fila_boton = i // 4
+            columna_boton = i % 4
+
+            if valor == "clear":
+                comando = self.limpiar_funcion_falsa_posicion
+                color = "#dc2626"
+                hover = "#b91c1c"
+            elif valor == "back":
+                comando = self.borrar_funcion_falsa_posicion
+                color = "#0ea5e9"
+                hover = "#0284c7"
+            else:
+                comando = lambda v=valor: self.insertar_funcion_falsa_posicion(v)
+                color = "#1a1f2b"
+                hover = "#243044"
+
+            ctk.CTkButton(
+                calculadora,
+                text=texto,
+                command=comando,
+                height=42,
+                corner_radius=9,
+                fg_color=color,
+                hover_color=hover,
+                border_width=1,
+                border_color="#343c4c",
+                text_color="#ffffff",
+                font=("Arial", 14, "bold"),
+            ).grid(row=fila_boton, column=columna_boton, padx=6, pady=6, sticky="ew")
+
+    def insertar_funcion_falsa_posicion(self, texto):
+        self.fp_funcion.insert("end", texto)
+        self.fp_funcion.focus()
+
+    def limpiar_funcion_falsa_posicion(self):
+        self.fp_funcion.delete(0, "end")
+        self.fp_funcion.focus()
+
+    def borrar_funcion_falsa_posicion(self):
+        texto = self.fp_funcion.get()
+        self.fp_funcion.delete(0, "end")
+        self.fp_funcion.insert(0, texto[:-1])
+        self.fp_funcion.focus()
+
+    def limpiar_grafica_falsa_posicion(self):
+        for widget in self.fp_grafica_frame.winfo_children():
+            widget.destroy()
+
+    def limpiar_tabla_falsa_posicion(self):
+        for widget in self.fp_tabla_frame.winfo_children():
+            widget.destroy()
+
+    def formatear_numero_falsa_posicion(self, valor):
+        try:
+            return f"{float(valor):.6f}"
+        except Exception:
+            return str(valor)
+
+    def graficar_falsa_posicion_desde_formulario(self):
+        try:
+            expresion = self.fp_funcion.get()
+            a = self.metodo_actual.convertir_numero(self.fp_a.get())
+            b = self.metodo_actual.convertir_numero(self.fp_b.get())
+
+            _, _, f_numpy = self.metodo_actual.obtener_funciones(expresion)
+
+            self.dibujar_grafica_falsa_posicion(
+                funcion_numpy=f_numpy,
+                a=a,
+                b=b,
+                c=None,
+            )
+        except Exception as error:
+            self.mostrar_error_falsa_posicion(str(error))
+
+    def calcular_falsa_posicion(self):
+        try:
+            datos = self.metodo_actual.calcular_detallado(
+                funcion=self.fp_funcion.get(),
+                a=self.fp_a.get(),
+                b=self.fp_b.get(),
+                tolerancia=self.fp_error.get(),
+            )
+
+            self.dibujar_grafica_falsa_posicion(
+                funcion_numpy=datos["funcion_numpy"],
+                a=datos["a_inicial"],
+                b=datos["b_inicial"],
+                c=datos["c_final"],
+            )
+
+            self.mostrar_tabla_falsa_posicion(datos)
+
+        except Exception as error:
+            self.mostrar_error_falsa_posicion(str(error))
+
+    def dibujar_grafica_falsa_posicion(self, funcion_numpy, a, b, c=None):
+        self.limpiar_grafica_falsa_posicion()
+
+        ancho = abs(b - a)
+
+        if ancho == 0:
+            ancho = 1
+
+        margen_x = ancho * 0.12
+
+        x_min = a - margen_x
+        x_max = b + margen_x
+
+        xs = np.linspace(x_min, x_max, 700)
+
+        with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+            try:
+                ys = funcion_numpy(xs)
+            except Exception:
+                ys = np.array([funcion_numpy(float(x)) for x in xs])
+
+        ys = np.array(ys, dtype=float)
+
+        mascara = np.isfinite(ys)
+        xs_validos = xs[mascara]
+        ys_validos = ys[mascara]
+
+        if len(xs_validos) == 0:
+            self.mostrar_error_falsa_posicion("No se pudo graficar la función en ese intervalo.")
+            return
+
+        valores_y = list(ys_validos)
+
+        fa = None
+        fb = None
+        fc = None
+
+        try:
+            fa = float(funcion_numpy(a))
+            fb = float(funcion_numpy(b))
+            valores_y.append(fa)
+            valores_y.append(fb)
+        except Exception:
+            pass
+
+        if c is not None:
+            try:
+                fc = float(funcion_numpy(c))
+                valores_y.append(fc)
+            except Exception:
+                pass
+
+        valores_y = np.array(valores_y, dtype=float)
+        valores_y = valores_y[np.isfinite(valores_y)]
+
+        y_min = np.min(valores_y)
+        y_max = np.max(valores_y)
+
+        if y_min == y_max:
+            y_min -= 1
+            y_max += 1
+
+        margen_y = abs(y_max - y_min) * 0.18
+        y_min -= margen_y
+        y_max += margen_y
+
+        figura = Figure(figsize=(7.4, 3.8), dpi=100)
+        figura.patch.set_facecolor("#151a22")
+
+        eje = figura.add_subplot(111)
+        eje.set_facecolor("#101216")
+
+        eje.plot(
+            xs_validos,
+            ys_validos,
+            linewidth=2,
+            color="#7cc7ff",
+            label="f(x)"
+        )
+
+        eje.axhline(0, color="#ffffff", linewidth=1, alpha=0.75)
+        eje.axvline(0, color="#ffffff", linewidth=1, alpha=0.25)
+
+        if fa is not None and fb is not None:
+            eje.scatter([a], [fa], color="#ef4444", s=75, label="a", zorder=5)
+            eje.scatter([b], [fb], color="#f28c28", s=75, label="b", zorder=5)
+
+            eje.plot(
+                [a, b],
+                [fa, fb],
+                color="#a78bfa",
+                linestyle="--",
+                linewidth=1.5,
+                label="recta secante"
+            )
+
+            eje.annotate(
+                "a",
+                (a, fa),
+                textcoords="offset points",
+                xytext=(0, 10),
+                ha="center",
+                color="#ef4444",
+                fontsize=12,
+                fontweight="bold",
+            )
+
+            eje.annotate(
+                "b",
+                (b, fb),
+                textcoords="offset points",
+                xytext=(0, 10),
+                ha="center",
+                color="#f28c28",
+                fontsize=12,
+                fontweight="bold",
+            )
+
+            eje.axvline(a, color="#ef4444", linewidth=1, alpha=0.35)
+            eje.axvline(b, color="#f28c28", linewidth=1, alpha=0.35)
+
+        if c is not None and fc is not None:
+            eje.scatter([c], [fc], color="#22c55e", s=85, label="c", zorder=6)
+
+            eje.annotate(
+                "c",
+                (c, fc),
+                textcoords="offset points",
+                xytext=(0, 10),
+                ha="center",
+                color="#22c55e",
+                fontsize=12,
+                fontweight="bold",
+            )
+
+            eje.axvline(c, color="#22c55e", linewidth=1, alpha=0.35)
+
+        eje.set_xlim(x_min, x_max)
+        eje.set_ylim(y_min, y_max)
+
+        eje.grid(True, alpha=0.25)
+        eje.tick_params(colors="#dbeafe")
+        eje.ticklabel_format(useOffset=False)
+
+        eje.spines["bottom"].set_color("#64748b")
+        eje.spines["top"].set_color("#64748b")
+        eje.spines["left"].set_color("#64748b")
+        eje.spines["right"].set_color("#64748b")
+
+        eje.set_title("Gráfica de la función", color="#ffffff", fontsize=13, fontweight="bold")
+        eje.set_xlabel("x", color="#dbeafe")
+        eje.set_ylabel("f(x)", color="#dbeafe")
+
+        leyenda = eje.legend()
+        if leyenda:
+            leyenda.get_frame().set_facecolor("#151a22")
+            leyenda.get_frame().set_edgecolor("#344054")
+
+            for texto in leyenda.get_texts():
+                texto.set_color("#ffffff")
+
+        figura.tight_layout()
+
+        canvas = FigureCanvasTkAgg(figura, master=self.fp_grafica_frame)
+        canvas.draw()
+        canvas.get_tk_widget().grid(row=0, column=0, padx=12, pady=12, sticky="nsew")
+
+    def mostrar_tabla_falsa_posicion(self, datos):
+        self.limpiar_tabla_falsa_posicion()
+
+        self.fp_tabla_frame.grid_columnconfigure(0, weight=1)
+
+        tarjeta = ctk.CTkFrame(
+            self.fp_tabla_frame,
+            fg_color="#172238",
+            corner_radius=10,
+            border_width=1,
+            border_color="#24344f",
+        )
+        tarjeta.grid(row=0, column=0, padx=14, pady=(14, 12), sticky="ew")
+        tarjeta.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            tarjeta,
+            text="Raíz aproximada",
+            font=("Arial", 13, "bold"),
+            text_color="#7cc7ff",
+        ).grid(row=0, column=0, padx=16, pady=(12, 4), sticky="w")
+
+        ctk.CTkLabel(
+            tarjeta,
+            text=f"{datos['raiz']:.10f}",
+            font=("Arial", 24, "bold"),
+            text_color="#9fffe4",
+        ).grid(row=1, column=0, padx=16, pady=(0, 6), sticky="w")
+
+        ctk.CTkLabel(
+            tarjeta,
+            text=f"Tope automático de iteraciones: {datos['max_iteraciones_calculadas']}",
+            font=("Arial", 13, "bold"),
+            text_color="#ffffff",
+        ).grid(row=2, column=0, padx=16, pady=(0, 4), sticky="w")
+
+        ctk.CTkLabel(
+            tarjeta,
+            text=datos["mensaje"],
+            font=("Arial", 13, "bold"),
+            text_color="#ffffff",
+        ).grid(row=3, column=0, padx=16, pady=(0, 12), sticky="w")
+
+        tabla = ctk.CTkFrame(
+            self.fp_tabla_frame,
+            fg_color="#101216",
+            corner_radius=12,
+            border_width=1,
+            border_color="#303846",
+        )
+        tabla.grid(row=1, column=0, padx=14, pady=(0, 14), sticky="ew")
+
+        encabezados = [
+            "n",
+            "a",
+            "b",
+            "c",
+            "f(a)",
+            "f(c)",
+            "f(b)",
+            "Error",
+        ]
+
+        for columna, texto in enumerate(encabezados):
+            ctk.CTkLabel(
+                tabla,
+                text=texto,
+                font=("Arial", 12, "bold"),
+                text_color="#ffffff",
+                fg_color="#1f2937",
+                corner_radius=6,
+                width=95,
+                height=30,
+            ).grid(row=0, column=columna, padx=3, pady=4, sticky="ew")
+
+        for fila_indice, fila in enumerate(datos["tabla"], start=1):
+            valores = [
+                fila["n"],
+                self.formatear_numero_falsa_posicion(fila["a"]),
+                self.formatear_numero_falsa_posicion(fila["b"]),
+                self.formatear_numero_falsa_posicion(fila["c"]),
+                fila["signo_fa"],
+                fila["signo_fc"],
+                fila["signo_fb"],
+                self.formatear_numero_falsa_posicion(fila["error"]),
+            ]
+
+            for columna, valor in enumerate(valores):
+                ctk.CTkLabel(
+                    tabla,
+                    text=str(valor),
+                    font=("Arial", 12),
+                    text_color="#e8edf7",
+                    fg_color="#151a22",
+                    corner_radius=6,
+                    width=95,
+                    height=28,
+                ).grid(row=fila_indice, column=columna, padx=3, pady=3, sticky="ew")
+
+    def mostrar_error_falsa_posicion(self, mensaje):
+        self.limpiar_tabla_falsa_posicion()
+
+        ctk.CTkLabel(
+            self.fp_tabla_frame,
+            text="No se pudo calcular",
+            font=("Arial", 18, "bold"),
+            text_color="#ffffff",
+        ).grid(row=0, column=0, padx=18, pady=(18, 6), sticky="w")
+
+        ctk.CTkLabel(
+            self.fp_tabla_frame,
+            text=mensaje,
+            font=("Arial", 14),
+            text_color="#fca5a5",
+            wraplength=620,
+            justify="left",
+        ).grid(row=1, column=0, padx=18, pady=(0, 18), sticky="w")
+
+    # =========================================================
+    # PANTALLA ESPECIAL: SECANTE
+    # =========================================================
+
+    def mostrar_secante(self):
+        self.limpiar_pantalla()
+
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)
+
+        encabezado = ctk.CTkFrame(
+            self,
+            fg_color="#102d52",
+            corner_radius=0,
+            border_width=0,
+        )
+        encabezado.grid(row=0, column=0, sticky="ew")
+        encabezado.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkButton(
+            encabezado,
+            text="← Inicio",
+            command=self.mostrar_inicio,
+            width=110,
+            height=34,
+            fg_color="#1a1f2b",
+            hover_color="#243044",
+            border_width=1,
+            border_color="#496386",
+        ).grid(row=0, column=0, padx=22, pady=18, sticky="w")
+
+        self.crear_label(
+            encabezado,
+            "Secante",
+            tamano=26,
+            peso="bold",
+            color="#ffffff",
+        ).grid(row=0, column=1, padx=10, pady=18, sticky="w")
+
+        cuerpo = ctk.CTkFrame(self, fg_color="transparent")
+        cuerpo.grid(row=1, column=0, padx=28, pady=24, sticky="nsew")
+        cuerpo.grid_columnconfigure(0, weight=1)
+        cuerpo.grid_columnconfigure(1, weight=1)
+        cuerpo.grid_rowconfigure(0, weight=1)
+
+        panel_entrada = ctk.CTkScrollableFrame(
+            cuerpo,
+            fg_color="#101216",
+            corner_radius=16,
+            border_width=1,
+            border_color="#303846",
+        )
+        panel_entrada.grid(row=0, column=0, padx=(0, 10), pady=0, sticky="nsew")
+        panel_entrada.grid_columnconfigure(0, weight=1)
+
+        panel_resultado = ctk.CTkFrame(
+            cuerpo,
+            fg_color="#101216",
+            corner_radius=16,
+            border_width=1,
+            border_color="#303846",
+        )
+        panel_resultado.grid(row=0, column=1, padx=(10, 0), pady=0, sticky="nsew")
+        panel_resultado.grid_columnconfigure(0, weight=1)
+        panel_resultado.grid_rowconfigure(2, weight=1)
+
+        self.sec_resultado_panel = panel_resultado
+
+        self.crear_label(
+            panel_entrada,
+            "DATOS DE ENTRADA",
+            tamano=11,
+            peso="bold",
+            color="#75b8ff",
+        ).grid(row=0, column=0, padx=22, pady=(22, 0), sticky="w")
+
+        self.crear_label(
+            panel_entrada,
+            "Construye la función, escribe p0 y p1, y ejecuta el método.",
+            tamano=18,
+            peso="bold",
+            color="#ffffff",
+        ).grid(row=1, column=0, padx=22, pady=(4, 16), sticky="w")
+
+        self.sec_funcion = self.crear_input_secante(
+            panel_entrada,
+            2,
+            "Función f(x)",
+            "Ejemplo: x**3 - x - 2"
+        )
+
+        self.construir_calculadora_secante(panel_entrada, 4)
+
+        datos_intervalo = ctk.CTkFrame(panel_entrada, fg_color="transparent")
+        datos_intervalo.grid(row=5, column=0, padx=22, pady=(12, 4), sticky="ew")
+        datos_intervalo.grid_columnconfigure(0, weight=1)
+        datos_intervalo.grid_columnconfigure(1, weight=1)
+        datos_intervalo.grid_columnconfigure(2, weight=1)
+
+        self.sec_p0 = self.crear_input_secante_chico(datos_intervalo, 0, "P0", "0")
+        self.sec_p1 = self.crear_input_secante_chico(datos_intervalo, 1, "P0+1", "2")
+        self.sec_error = self.crear_input_secante_chico(datos_intervalo, 2, "Error máximo", "0.001")
+
+        ctk.CTkButton(
+            panel_entrada,
+            text="Graficar función",
+            command=self.graficar_secante_desde_formulario,
+            height=40,
+            corner_radius=10,
+            font=("Arial", 14, "bold"),
+            fg_color="#159a73",
+            hover_color="#0f7a5d",
+        ).grid(row=6, column=0, padx=22, pady=(12, 8), sticky="ew")
+
+        ctk.CTkButton(
+            panel_entrada,
+            text="Calcular secante",
+            command=self.calcular_secante,
+            height=44,
+            corner_radius=10,
+            font=("Arial", 15, "bold"),
+            fg_color="#1f6feb",
+            hover_color="#1959bd",
+        ).grid(row=7, column=0, padx=22, pady=(0, 24), sticky="ew")
+
+        self.crear_label(
+            panel_resultado,
+            "GRÁFICA",
+            tamano=11,
+            peso="bold",
+            color="#75b8ff",
+        ).grid(row=0, column=0, padx=22, pady=(22, 0), sticky="w")
+
+        self.sec_grafica_frame = ctk.CTkFrame(
+            panel_resultado,
+            fg_color="#151a22",
+            corner_radius=12,
+            border_width=1,
+            border_color="#2a3342",
+        )
+        self.sec_grafica_frame.grid(row=1, column=0, padx=22, pady=(10, 14), sticky="ew")
+        self.sec_grafica_frame.grid_columnconfigure(0, weight=1)
+
+        self.crear_label(
+            self.sec_grafica_frame,
+            "Aquí aparecerá la gráfica de f(x) con los puntos P0, P0+1 y la aproximación.",
+            tamano=14,
+            color="#cbd5e1",
+        ).grid(row=0, column=0, padx=18, pady=18, sticky="w")
+
+        self.sec_tabla_frame = ctk.CTkScrollableFrame(
+            panel_resultado,
+            fg_color="#151a22",
+            corner_radius=12,
+            border_width=1,
+            border_color="#2a3342",
+        )
+        self.sec_tabla_frame.grid(row=2, column=0, padx=22, pady=(0, 22), sticky="nsew")
+        self.sec_tabla_frame.grid_columnconfigure(0, weight=1)
+
+        self.crear_label(
+            self.sec_tabla_frame,
+            "Aquí aparecerá la tabla de iteraciones.",
+            tamano=14,
+            color="#cbd5e1",
+        ).grid(row=0, column=0, padx=18, pady=18, sticky="w")
+
+    def crear_input_secante(self, padre, fila, texto, placeholder=""):
+        ctk.CTkLabel(
+            padre,
+            text=texto,
+            font=("Arial", 13, "bold"),
+            text_color="#f1f5ff",
+        ).grid(row=fila, column=0, padx=22, pady=(10, 4), sticky="w")
+
+        entrada = ctk.CTkEntry(
+            padre,
+            placeholder_text=placeholder,
+            height=38,
+            corner_radius=9,
+            fg_color="#0f141b",
+            border_color="#344054",
+            text_color="#ffffff",
+            font=("Arial", 14),
+        )
+        entrada.grid(row=fila + 1, column=0, padx=22, pady=(0, 8), sticky="ew")
+        return entrada
+
+    def crear_input_secante_chico(self, padre, columna, texto, placeholder=""):
+        contenedor = ctk.CTkFrame(padre, fg_color="transparent")
+        contenedor.grid(row=0, column=columna, padx=6, pady=0, sticky="ew")
+        contenedor.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            contenedor,
+            text=texto,
+            font=("Arial", 13, "bold"),
+            text_color="#f1f5ff",
+        ).grid(row=0, column=0, pady=(0, 4), sticky="w")
+
+        entrada = ctk.CTkEntry(
+            contenedor,
+            placeholder_text=placeholder,
+            height=36,
+            corner_radius=9,
+            fg_color="#0f141b",
+            border_color="#344054",
+            text_color="#ffffff",
+            font=("Arial", 13),
+        )
+        entrada.grid(row=1, column=0, sticky="ew")
+        return entrada
+
+    def construir_calculadora_secante(self, padre, fila):
+        calculadora = ctk.CTkFrame(
+            padre,
+            fg_color="#151a22",
+            corner_radius=14,
+            border_width=1,
+            border_color="#2a3342",
+        )
+        calculadora.grid(row=fila, column=0, padx=22, pady=(8, 10), sticky="ew")
+
+        for columna in range(4):
+            calculadora.grid_columnconfigure(columna, weight=1)
+
+        botones = [
+            ("x", "x"), ("sin", "sin("), ("cos", "cos("), ("C", "clear"),
+            ("+", "+"), ("-", "-"), ("×", "*"), ("÷", "/"),
+            ("x²", "**2"), ("xʸ", "**"), ("eˣ", "exp("), ("ln", "log("),
+            ("(", "("), (")", ")"), ("π", "pi"), ("⌫", "back"),
+        ]
+
+        for i, (texto, valor) in enumerate(botones):
+            fila_boton = i // 4
+            columna_boton = i % 4
+
+            if valor == "clear":
+                comando = self.limpiar_funcion_secante
+                color = "#dc2626"
+                hover = "#b91c1c"
+            elif valor == "back":
+                comando = self.borrar_funcion_secante
+                color = "#0ea5e9"
+                hover = "#0284c7"
+            else:
+                comando = lambda v=valor: self.insertar_funcion_secante(v)
+                color = "#1a1f2b"
+                hover = "#243044"
+
+            ctk.CTkButton(
+                calculadora,
+                text=texto,
+                command=comando,
+                height=42,
+                corner_radius=9,
+                fg_color=color,
+                hover_color=hover,
+                border_width=1,
+                border_color="#343c4c",
+                text_color="#ffffff",
+                font=("Arial", 14, "bold"),
+            ).grid(row=fila_boton, column=columna_boton, padx=6, pady=6, sticky="ew")
+
+    def insertar_funcion_secante(self, texto):
+        self.sec_funcion.insert("end", texto)
+        self.sec_funcion.focus()
+
+    def limpiar_funcion_secante(self):
+        self.sec_funcion.delete(0, "end")
+        self.sec_funcion.focus()
+
+    def borrar_funcion_secante(self):
+        texto = self.sec_funcion.get()
+        self.sec_funcion.delete(0, "end")
+        self.sec_funcion.insert(0, texto[:-1])
+        self.sec_funcion.focus()
+
+    def limpiar_grafica_secante(self):
+        for widget in self.sec_grafica_frame.winfo_children():
+            widget.destroy()
+
+    def limpiar_tabla_secante(self):
+        for widget in self.sec_tabla_frame.winfo_children():
+            widget.destroy()
+
+    def formatear_numero_secante(self, valor):
+        try:
+            return f"{float(valor):.6f}"
+        except Exception:
+            return str(valor)
+
+    def graficar_secante_desde_formulario(self):
+        try:
+            expresion = self.sec_funcion.get()
+            p0 = self.metodo_actual.convertir_numero(self.sec_p0.get())
+            p1 = self.metodo_actual.convertir_numero(self.sec_p1.get())
+
+            _, _, f_numpy = self.metodo_actual.obtener_funciones(expresion)
+
+            self.dibujar_grafica_secante(
+                funcion_numpy=f_numpy,
+                p0=p0,
+                p1=p1,
+                aprox=None,
+            )
+        except Exception as error:
+            self.mostrar_error_secante(str(error))
+
+    def calcular_secante(self):
+        try:
+            datos = self.metodo_actual.calcular_detallado(
+                funcion=self.sec_funcion.get(),
+                p0=self.sec_p0.get(),
+                p1=self.sec_p1.get(),
+                tolerancia=self.sec_error.get(),
+            )
+
+            self.dibujar_grafica_secante(
+                funcion_numpy=datos["funcion_numpy"],
+                p0=datos["p0_inicial"],
+                p1=datos["p1_inicial"],
+                aprox=datos["c_final"],
+            )
+
+            self.mostrar_tabla_secante(datos)
+
+        except Exception as error:
+            self.mostrar_error_secante(str(error))
+
+    def dibujar_grafica_secante(self, funcion_numpy, p0, p1, aprox=None):
+        self.limpiar_grafica_secante()
+
+        puntos_x = [p0, p1]
+        if aprox is not None:
+            puntos_x.append(aprox)
+
+        x_min_base = min(puntos_x)
+        x_max_base = max(puntos_x)
+        ancho = abs(x_max_base - x_min_base)
+
+        if ancho == 0:
+            ancho = 1
+
+        margen_x = ancho * 0.20
+        x_min = x_min_base - margen_x
+        x_max = x_max_base + margen_x
+
+        xs = np.linspace(x_min, x_max, 700)
+
+        with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+            try:
+                ys = funcion_numpy(xs)
+            except Exception:
+                ys = np.array([funcion_numpy(float(x)) for x in xs])
+
+        ys = np.array(ys, dtype=float)
+
+        mascara = np.isfinite(ys)
+        xs_validos = xs[mascara]
+        ys_validos = ys[mascara]
+
+        if len(xs_validos) == 0:
+            self.mostrar_error_secante("No se pudo graficar la función en ese intervalo.")
+            return
+
+        valores_y = list(ys_validos)
+
+        try:
+            f_p0 = float(funcion_numpy(p0))
+            f_p1 = float(funcion_numpy(p1))
+            valores_y.append(f_p0)
+            valores_y.append(f_p1)
+        except Exception:
+            f_p0 = None
+            f_p1 = None
+
+        if aprox is not None:
+            try:
+                f_aprox = float(funcion_numpy(aprox))
+                valores_y.append(f_aprox)
+            except Exception:
+                f_aprox = None
+        else:
+            f_aprox = None
+
+        valores_y = np.array(valores_y, dtype=float)
+        valores_y = valores_y[np.isfinite(valores_y)]
+
+        y_min = np.min(valores_y)
+        y_max = np.max(valores_y)
+
+        if y_min == y_max:
+            y_min -= 1
+            y_max += 1
+
+        margen_y = abs(y_max - y_min) * 0.18
+        y_min -= margen_y
+        y_max += margen_y
+
+        figura = Figure(figsize=(7.4, 3.8), dpi=100)
+        figura.patch.set_facecolor("#151a22")
+
+        eje = figura.add_subplot(111)
+        eje.set_facecolor("#101216")
+
+        eje.plot(
+            xs_validos,
+            ys_validos,
+            linewidth=2,
+            color="#7cc7ff",
+            label="f(x)"
+        )
+
+        eje.axhline(0, color="#ffffff", linewidth=1, alpha=0.75)
+        eje.axvline(0, color="#ffffff", linewidth=1, alpha=0.25)
+
+        if f_p0 is not None and f_p1 is not None:
+            eje.scatter([p0], [f_p0], color="#ef4444", s=75, label="P0", zorder=5)
+            eje.scatter([p1], [f_p1], color="#f28c28", s=75, label="P0+1", zorder=5)
+
+            eje.plot(
+                [p0, p1],
+                [f_p0, f_p1],
+                color="#a78bfa",
+                linestyle="--",
+                linewidth=1.6,
+                label="recta secante"
+            )
+
+            eje.annotate(
+                "P0",
+                (p0, f_p0),
+                textcoords="offset points",
+                xytext=(0, 10),
+                ha="center",
+                color="#ef4444",
+                fontsize=12,
+                fontweight="bold",
+            )
+
+            eje.annotate(
+                "P0+1",
+                (p1, f_p1),
+                textcoords="offset points",
+                xytext=(0, 10),
+                ha="center",
+                color="#f28c28",
+                fontsize=12,
+                fontweight="bold",
+            )
+
+            eje.axvline(p0, color="#ef4444", linewidth=1, alpha=0.35)
+            eje.axvline(p1, color="#f28c28", linewidth=1, alpha=0.35)
+
+        if aprox is not None and f_aprox is not None:
+            eje.scatter([aprox], [f_aprox], color="#22c55e", s=85, label="Aprox", zorder=6)
+
+            eje.annotate(
+                "Aprox",
+                (aprox, f_aprox),
+                textcoords="offset points",
+                xytext=(0, 10),
+                ha="center",
+                color="#22c55e",
+                fontsize=12,
+                fontweight="bold",
+            )
+
+            eje.axvline(aprox, color="#22c55e", linewidth=1, alpha=0.35)
+
+        eje.set_xlim(x_min, x_max)
+        eje.set_ylim(y_min, y_max)
+
+        eje.grid(True, alpha=0.25)
+        eje.tick_params(colors="#dbeafe")
+        eje.ticklabel_format(useOffset=False)
+
+        eje.spines["bottom"].set_color("#64748b")
+        eje.spines["top"].set_color("#64748b")
+        eje.spines["left"].set_color("#64748b")
+        eje.spines["right"].set_color("#64748b")
+
+        eje.set_title("Gráfica de la función", color="#ffffff", fontsize=13, fontweight="bold")
+        eje.set_xlabel("x", color="#dbeafe")
+        eje.set_ylabel("f(x)", color="#dbeafe")
+
+        leyenda = eje.legend()
+        if leyenda:
+            leyenda.get_frame().set_facecolor("#151a22")
+            leyenda.get_frame().set_edgecolor("#344054")
+
+            for texto in leyenda.get_texts():
+                texto.set_color("#ffffff")
+
+        figura.tight_layout()
+
+        canvas = FigureCanvasTkAgg(figura, master=self.sec_grafica_frame)
+        canvas.draw()
+        canvas.get_tk_widget().grid(row=0, column=0, padx=12, pady=12, sticky="nsew")
+
+    def mostrar_tabla_secante(self, datos):
+        self.limpiar_tabla_secante()
+
+        self.sec_tabla_frame.grid_columnconfigure(0, weight=1)
+
+        tarjeta = ctk.CTkFrame(
+            self.sec_tabla_frame,
+            fg_color="#172238",
+            corner_radius=10,
+            border_width=1,
+            border_color="#24344f",
+        )
+        tarjeta.grid(row=0, column=0, padx=14, pady=(14, 12), sticky="ew")
+        tarjeta.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            tarjeta,
+            text="Raíz aproximada",
+            font=("Arial", 13, "bold"),
+            text_color="#7cc7ff",
+        ).grid(row=0, column=0, padx=16, pady=(12, 4), sticky="w")
+
+        ctk.CTkLabel(
+            tarjeta,
+            text=f"{datos['raiz']:.10f}",
+            font=("Arial", 24, "bold"),
+            text_color="#9fffe4",
+        ).grid(row=1, column=0, padx=16, pady=(0, 6), sticky="w")
+
+        ctk.CTkLabel(
+            tarjeta,
+            text=f"Tope automático de iteraciones: {datos['max_iteraciones_calculadas']}",
+            font=("Arial", 13, "bold"),
+            text_color="#ffffff",
+        ).grid(row=2, column=0, padx=16, pady=(0, 4), sticky="w")
+
+        ctk.CTkLabel(
+            tarjeta,
+            text=datos["mensaje"],
+            font=("Arial", 13, "bold"),
+            text_color="#ffffff",
+        ).grid(row=3, column=0, padx=16, pady=(0, 12), sticky="w")
+
+        tabla = ctk.CTkFrame(
+            self.sec_tabla_frame,
+            fg_color="#101216",
+            corner_radius=12,
+            border_width=1,
+            border_color="#303846",
+        )
+        tabla.grid(row=1, column=0, padx=14, pady=(0, 14), sticky="ew")
+
+        encabezados = [
+            "Iteración",
+            "Pᵢ",
+            "Pᵢ₊₁",
+            "Aprox",
+            "Error",
+        ]
+
+        for columna, texto in enumerate(encabezados):
+            ctk.CTkLabel(
+                tabla,
+                text=texto,
+                font=("Arial", 12, "bold"),
+                text_color="#ffffff",
+                fg_color="#1f2937",
+                corner_radius=6,
+                width=120,
+                height=30,
+            ).grid(row=0, column=columna, padx=3, pady=4, sticky="ew")
+
+        for fila_indice, fila in enumerate(datos["tabla"], start=1):
+            valores = [
+                fila["n"],
+                self.formatear_numero_secante(fila["pi"]),
+                self.formatear_numero_secante(fila["pi_mas_1"]),
+                self.formatear_numero_secante(fila["aprox"]),
+                self.formatear_numero_secante(fila["error"]),
+            ]
+
+            for columna, valor in enumerate(valores):
+                ctk.CTkLabel(
+                    tabla,
+                    text=str(valor),
+                    font=("Arial", 12),
+                    text_color="#e8edf7",
+                    fg_color="#151a22",
+                    corner_radius=6,
+                    width=120,
+                    height=28,
+                ).grid(row=fila_indice, column=columna, padx=3, pady=3, sticky="ew")
+
+    def mostrar_error_secante(self, mensaje):
+        self.limpiar_tabla_secante()
+
+        ctk.CTkLabel(
+            self.sec_tabla_frame,
+            text="No se pudo calcular",
+            font=("Arial", 18, "bold"),
+            text_color="#ffffff",
+        ).grid(row=0, column=0, padx=18, pady=(18, 6), sticky="w")
+
+        ctk.CTkLabel(
+            self.sec_tabla_frame,
             text=mensaje,
             font=("Arial", 14),
             text_color="#fca5a5",
