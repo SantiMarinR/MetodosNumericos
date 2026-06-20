@@ -459,6 +459,10 @@ class App(ctk.CTk):
             self.mostrar_lagrange()
             return
 
+        if self.normalizar(nombre_metodo) == self.normalizar("Neville"):
+            self.mostrar_neville()
+            return
+
         if (
             self.normalizar(nombre_metodo) == self.normalizar("Diferencias divididas")
             or self.normalizar(nombre_metodo) == self.normalizar("Diferencia dividida")
@@ -5855,6 +5859,734 @@ class App(ctk.CTk):
             wraplength=720,
             justify="left",
         ).grid(row=1, column=0, padx=18, pady=(0, 18), sticky="w")
+
+
+    # =========================================================
+    # PANTALLA ESPECIAL: NEVILLE SIN VALOR X A INTERPOLAR
+    # =========================================================
+
+    def mostrar_neville(self):
+        self.limpiar_pantalla()
+
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)
+
+        encabezado = ctk.CTkFrame(
+            self,
+            fg_color="#102d52",
+            corner_radius=0,
+            border_width=0,
+        )
+        encabezado.grid(row=0, column=0, sticky="ew")
+        encabezado.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkButton(
+            encabezado,
+            text="← Inicio",
+            command=self.mostrar_inicio,
+            width=110,
+            height=34,
+            fg_color="#1a1f2b",
+            hover_color="#243044",
+            border_width=1,
+            border_color="#496386",
+        ).grid(row=0, column=0, padx=22, pady=18, sticky="w")
+
+        self.crear_label(
+            encabezado,
+            "Neville",
+            tamano=26,
+            peso="bold",
+            color="#ffffff",
+        ).grid(row=0, column=1, padx=10, pady=18, sticky="w")
+
+        cuerpo = ctk.CTkFrame(self, fg_color="transparent")
+        cuerpo.grid(row=1, column=0, padx=28, pady=24, sticky="nsew")
+        cuerpo.grid_columnconfigure(0, weight=1)
+        cuerpo.grid_columnconfigure(1, weight=2)
+        cuerpo.grid_rowconfigure(0, weight=1)
+
+        panel_entrada = ctk.CTkScrollableFrame(
+            cuerpo,
+            fg_color="#101216",
+            corner_radius=16,
+            border_width=1,
+            border_color="#303846",
+        )
+        panel_entrada.grid(row=0, column=0, padx=(0, 10), pady=0, sticky="nsew")
+        panel_entrada.grid_columnconfigure(0, weight=1)
+
+        panel_resultado = ctk.CTkFrame(
+            cuerpo,
+            fg_color="#101216",
+            corner_radius=16,
+            border_width=1,
+            border_color="#303846",
+        )
+        panel_resultado.grid(row=0, column=1, padx=(10, 0), pady=0, sticky="nsew")
+        panel_resultado.grid_columnconfigure(0, weight=1)
+        panel_resultado.grid_rowconfigure(2, weight=1)
+
+        self.nev_resultado_panel = panel_resultado
+
+        self.crear_label(
+            panel_entrada,
+            "DATOS DE ENTRADA",
+            tamano=11,
+            peso="bold",
+            color="#75b8ff",
+        ).grid(row=0, column=0, padx=22, pady=(22, 0), sticky="w")
+
+        self.crear_label(
+            panel_entrada,
+            "Escribe f(x), define los puntos xᵢ y calcula el polinomio por Neville.",
+            tamano=18,
+            peso="bold",
+            color="#ffffff",
+        ).grid(row=1, column=0, padx=22, pady=(4, 16), sticky="w")
+
+        self.nev_funcion = self.crear_input_neville(
+            panel_entrada,
+            2,
+            "Función f(x)",
+            "Ejemplo: 3*x**2*sin(x)"
+        )
+
+        self.construir_calculadora_neville(panel_entrada, 4)
+
+        self.nev_cantidad = self.crear_input_neville(
+            panel_entrada,
+            5,
+            "Cantidad de puntos xᵢ",
+            "Ejemplo: 6"
+        )
+
+        ctk.CTkButton(
+            panel_entrada,
+            text="Crear tabla de xᵢ",
+            command=self.crear_tabla_x_neville,
+            height=40,
+            corner_radius=10,
+            font=("Arial", 14, "bold"),
+            fg_color="#1f6feb",
+            hover_color="#1959bd",
+        ).grid(row=7, column=0, padx=22, pady=(10, 12), sticky="ew")
+
+        self.nev_puntos_frame = ctk.CTkScrollableFrame(
+            panel_entrada,
+            fg_color="#151a22",
+            corner_radius=12,
+            border_width=1,
+            border_color="#2a3342",
+            height=180,
+        )
+        self.nev_puntos_frame.grid(row=8, column=0, padx=22, pady=(0, 14), sticky="ew")
+        self.nev_puntos_frame.grid_columnconfigure(0, weight=0)
+        self.nev_puntos_frame.grid_columnconfigure(1, weight=1)
+        self.nev_puntos_frame.grid_columnconfigure(2, weight=1)
+
+        self.crear_label(
+            self.nev_puntos_frame,
+            "Crea la tabla y escribe los valores xᵢ. Los yᵢ=f(xᵢ) se calculan solos.",
+            tamano=13,
+            color="#cbd5e1",
+        ).grid(row=0, column=0, columnspan=3, padx=12, pady=12, sticky="w")
+
+        self.nev_x_entries = []
+        self.nev_y_labels = []
+
+        ctk.CTkButton(
+            panel_entrada,
+            text="Evaluar yᵢ y calcular polinomio",
+            command=self.calcular_neville,
+            height=44,
+            corner_radius=10,
+            font=("Arial", 15, "bold"),
+            fg_color="#159a73",
+            hover_color="#0f7a5d",
+        ).grid(row=11, column=0, padx=22, pady=(0, 24), sticky="ew")
+
+        self.crear_label(
+            panel_resultado,
+            "GRÁFICA",
+            tamano=11,
+            peso="bold",
+            color="#75b8ff",
+        ).grid(row=0, column=0, padx=22, pady=(22, 0), sticky="w")
+
+        self.nev_grafica_frame = ctk.CTkFrame(
+            panel_resultado,
+            fg_color="#151a22",
+            corner_radius=12,
+            border_width=1,
+            border_color="#2a3342",
+        )
+        self.nev_grafica_frame.grid(row=1, column=0, padx=22, pady=(10, 14), sticky="ew")
+        self.nev_grafica_frame.grid_columnconfigure(0, weight=1)
+
+        self.crear_label(
+            self.nev_grafica_frame,
+            "Aquí aparecerá f(x), P(x) de Neville y los puntos usados.",
+            tamano=14,
+            color="#cbd5e1",
+        ).grid(row=0, column=0, padx=18, pady=18, sticky="w")
+
+        self.nev_tabla_frame = ctk.CTkScrollableFrame(
+            panel_resultado,
+            fg_color="#151a22",
+            corner_radius=12,
+            border_width=1,
+            border_color="#2a3342",
+        )
+        self.nev_tabla_frame.grid(row=2, column=0, padx=22, pady=(0, 22), sticky="nsew")
+        self.nev_tabla_frame.grid_columnconfigure(0, weight=1)
+
+        self.crear_label(
+            self.nev_tabla_frame,
+            "Aquí aparecerá la tabla triangular de Neville y el polinomio.",
+            tamano=14,
+            color="#cbd5e1",
+        ).grid(row=0, column=0, padx=18, pady=18, sticky="w")
+
+    def crear_input_neville(self, padre, fila, texto, placeholder=""):
+        ctk.CTkLabel(
+            padre,
+            text=texto,
+            font=("Arial", 13, "bold"),
+            text_color="#f1f5ff",
+        ).grid(row=fila, column=0, padx=22, pady=(10, 4), sticky="w")
+
+        entrada = ctk.CTkEntry(
+            padre,
+            placeholder_text=placeholder,
+            height=38,
+            corner_radius=9,
+            fg_color="#0f141b",
+            border_color="#344054",
+            text_color="#ffffff",
+            font=("Arial", 14),
+        )
+        entrada.grid(row=fila + 1, column=0, padx=22, pady=(0, 8), sticky="ew")
+        return entrada
+
+    def construir_calculadora_neville(self, padre, fila):
+        calculadora = ctk.CTkFrame(
+            padre,
+            fg_color="#151a22",
+            corner_radius=14,
+            border_width=1,
+            border_color="#2a3342",
+        )
+        calculadora.grid(row=fila, column=0, padx=22, pady=(8, 10), sticky="ew")
+
+        for columna in range(4):
+            calculadora.grid_columnconfigure(columna, weight=1)
+
+        botones = [
+            ("x", "x"), ("sin", "sin("), ("cos", "cos("), ("C", "clear"),
+            ("+", "+"), ("-", "-"), ("×", "*"), ("÷", "/"),
+            ("x²", "**2"), ("xʸ", "**"), ("eˣ", "exp("), ("ln", "log("),
+            ("(", "("), (")", ")"), ("π", "pi"), ("⌫", "back"),
+        ]
+
+        for i, (texto, valor) in enumerate(botones):
+            fila_boton = i // 4
+            columna_boton = i % 4
+
+            if valor == "clear":
+                comando = self.limpiar_funcion_neville
+                color = "#dc2626"
+                hover = "#b91c1c"
+            elif valor == "back":
+                comando = self.borrar_funcion_neville
+                color = "#0ea5e9"
+                hover = "#0284c7"
+            else:
+                comando = lambda v=valor: self.insertar_funcion_neville(v)
+                color = "#1a1f2b"
+                hover = "#243044"
+
+            ctk.CTkButton(
+                calculadora,
+                text=texto,
+                command=comando,
+                height=42,
+                corner_radius=9,
+                fg_color=color,
+                hover_color=hover,
+                border_width=1,
+                border_color="#343c4c",
+                text_color="#ffffff",
+                font=("Arial", 14, "bold"),
+            ).grid(row=fila_boton, column=columna_boton, padx=6, pady=6, sticky="ew")
+
+    def insertar_funcion_neville(self, texto):
+        self.nev_funcion.insert("end", texto)
+        self.nev_funcion.focus()
+
+    def limpiar_funcion_neville(self):
+        self.nev_funcion.delete(0, "end")
+        self.nev_funcion.focus()
+
+    def borrar_funcion_neville(self):
+        texto = self.nev_funcion.get()
+        self.nev_funcion.delete(0, "end")
+        self.nev_funcion.insert(0, texto[:-1])
+        self.nev_funcion.focus()
+
+    def crear_tabla_x_neville(self):
+        for widget in self.nev_puntos_frame.winfo_children():
+            widget.destroy()
+
+        self.nev_x_entries = []
+        self.nev_y_labels = []
+
+        try:
+            cantidad = int(self.nev_cantidad.get())
+
+            if cantidad < 2:
+                raise ValueError("Neville necesita al menos 2 puntos.")
+
+            if cantidad > 12:
+                raise ValueError("Para que la tabla se vea bien, usa máximo 12 puntos.")
+
+            encabezados = ["i", "xᵢ", "yᵢ = f(xᵢ)"]
+
+            for columna, texto in enumerate(encabezados):
+                ctk.CTkLabel(
+                    self.nev_puntos_frame,
+                    text=texto,
+                    font=("Arial", 12, "bold"),
+                    text_color="#ffffff",
+                    fg_color="#1f2937",
+                    corner_radius=6,
+                    height=28,
+                ).grid(row=0, column=columna, padx=4, pady=4, sticky="ew")
+
+            for i in range(cantidad):
+                ctk.CTkLabel(
+                    self.nev_puntos_frame,
+                    text=str(i),
+                    font=("Arial", 12, "bold"),
+                    text_color="#ffffff",
+                    fg_color="#101216",
+                    corner_radius=6,
+                    width=44,
+                    height=32,
+                ).grid(row=i + 1, column=0, padx=4, pady=4, sticky="ew")
+
+                entrada = ctk.CTkEntry(
+                    self.nev_puntos_frame,
+                    placeholder_text=f"x{i}",
+                    height=32,
+                    corner_radius=8,
+                    fg_color="#0f141b",
+                    border_color="#344054",
+                    text_color="#ffffff",
+                    font=("Arial", 13),
+                )
+                entrada.grid(row=i + 1, column=1, padx=4, pady=4, sticky="ew")
+                self.nev_x_entries.append(entrada)
+
+                etiqueta_y = ctk.CTkLabel(
+                    self.nev_puntos_frame,
+                    text="—",
+                    font=("Arial", 12, "bold"),
+                    text_color="#9fffe4",
+                    fg_color="#101216",
+                    corner_radius=6,
+                    height=32,
+                )
+                etiqueta_y.grid(row=i + 1, column=2, padx=4, pady=4, sticky="ew")
+                self.nev_y_labels.append(etiqueta_y)
+
+        except Exception as error:
+            ctk.CTkLabel(
+                self.nev_puntos_frame,
+                text=f"Error: {error}",
+                font=("Arial", 13, "bold"),
+                text_color="#fca5a5",
+                wraplength=520,
+                justify="left",
+            ).grid(row=0, column=0, padx=12, pady=12, sticky="w")
+
+    def limpiar_grafica_neville(self):
+        for widget in self.nev_grafica_frame.winfo_children():
+            widget.destroy()
+
+    def limpiar_tabla_neville(self):
+        for widget in self.nev_tabla_frame.winfo_children():
+            widget.destroy()
+
+    def formatear_numero_neville(self, valor, decimales=6):
+        if valor is None:
+            return ""
+        try:
+            return f"{float(valor):.{decimales}f}"
+        except Exception:
+            return str(valor)
+
+    def calcular_neville(self):
+        try:
+            if not self.nev_x_entries:
+                raise ValueError("Primero crea la tabla de xᵢ.")
+
+            puntos_x = [entrada.get() for entrada in self.nev_x_entries]
+
+            datos = self.metodo_actual.calcular_detallado(
+                funcion=self.nev_funcion.get(),
+                puntos_x=puntos_x,
+            )
+
+            for etiqueta, yi in zip(self.nev_y_labels, datos["puntos_y"]):
+                etiqueta.configure(text=self.formatear_numero_neville(yi, 6))
+
+            self.dibujar_grafica_neville(datos)
+            self.mostrar_resultado_neville(datos)
+
+        except Exception as error:
+            self.mostrar_error_neville(str(error))
+
+    def dibujar_grafica_neville(self, datos):
+        self.limpiar_grafica_neville()
+
+        puntos_x = datos["puntos_x"]
+        puntos_y = datos["puntos_y"]
+        funcion_numpy = datos["funcion_numpy"]
+        polinomio_numpy = datos["polinomio_numpy"]
+
+        x_min = min(puntos_x)
+        x_max = max(puntos_x)
+        ancho = x_max - x_min
+
+        if ancho == 0:
+            ancho = 1
+
+        margen = ancho * 0.45
+        x_inicio = x_min - margen
+        x_final = x_max + margen
+
+        xs = np.linspace(x_inicio, x_final, 900)
+
+        with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+            try:
+                ys_funcion = funcion_numpy(xs)
+            except Exception:
+                ys_funcion = np.array([funcion_numpy(float(valor)) for valor in xs])
+
+            try:
+                ys_polinomio = polinomio_numpy(xs)
+            except Exception:
+                ys_polinomio = np.array([polinomio_numpy(float(valor)) for valor in xs])
+
+        ys_funcion = np.array(ys_funcion, dtype=float)
+        ys_polinomio = np.array(ys_polinomio, dtype=float)
+
+        mascara_funcion = np.isfinite(ys_funcion)
+        mascara_polinomio = np.isfinite(ys_polinomio)
+
+        figura = Figure(figsize=(7.6, 3.9), dpi=100)
+        figura.patch.set_facecolor("#151a22")
+
+        eje = figura.add_subplot(111)
+        eje.set_facecolor("#101216")
+
+        eje.plot(
+            xs[mascara_polinomio],
+            ys_polinomio[mascara_polinomio],
+            linewidth=2,
+            color="#7cc7ff",
+            label="P(x) interpolante",
+            zorder=2,
+        )
+
+        eje.plot(
+            xs[mascara_funcion],
+            ys_funcion[mascara_funcion],
+            linewidth=3,
+            linestyle="--",
+            color="#ff4fd8",
+            label="f(x) original",
+            zorder=4,
+        )
+
+        eje.scatter(
+            puntos_x,
+            puntos_y,
+            s=70,
+            color="#f28c28",
+            label="(xᵢ, f(xᵢ))",
+            zorder=6,
+        )
+
+        for i, (xi, yi) in enumerate(zip(puntos_x, puntos_y)):
+            eje.annotate(
+                f"P{i}",
+                (xi, yi),
+                textcoords="offset points",
+                xytext=(0, 10),
+                ha="center",
+                color="#f28c28",
+                fontsize=11,
+                fontweight="bold",
+            )
+
+        eje.axhline(0, color="#ffffff", linewidth=1, alpha=0.65)
+
+        if x_inicio <= 0 <= x_final:
+            eje.axvline(0, color="#ffffff", linewidth=1, alpha=0.25)
+
+        valores_y = []
+        valores_y.extend(ys_funcion[mascara_funcion])
+        valores_y.extend(ys_polinomio[mascara_polinomio])
+        valores_y.extend(puntos_y)
+        valores_y = np.array(valores_y, dtype=float)
+        valores_y = valores_y[np.isfinite(valores_y)]
+
+        if len(valores_y) > 0:
+            y_min = np.min(valores_y)
+            y_max = np.max(valores_y)
+
+            if y_min == y_max:
+                y_min -= 1
+                y_max += 1
+
+            margen_y = abs(y_max - y_min) * 0.18
+            eje.set_ylim(y_min - margen_y, y_max + margen_y)
+
+        eje.set_xlim(x_inicio, x_final)
+        eje.grid(True, alpha=0.25)
+        eje.tick_params(colors="#dbeafe")
+        eje.ticklabel_format(useOffset=False)
+
+        eje.spines["bottom"].set_color("#64748b")
+        eje.spines["top"].set_color("#64748b")
+        eje.spines["left"].set_color("#64748b")
+        eje.spines["right"].set_color("#64748b")
+
+        eje.set_title("Interpolación de Neville", color="#ffffff", fontsize=13, fontweight="bold")
+        eje.set_xlabel("x", color="#dbeafe")
+        eje.set_ylabel("f(x) / P(x)", color="#dbeafe")
+
+        leyenda = eje.legend()
+        if leyenda:
+            leyenda.get_frame().set_facecolor("#151a22")
+            leyenda.get_frame().set_edgecolor("#344054")
+            for texto in leyenda.get_texts():
+                texto.set_color("#ffffff")
+
+        figura.tight_layout()
+
+        canvas = FigureCanvasTkAgg(figura, master=self.nev_grafica_frame)
+        canvas.draw()
+        canvas.get_tk_widget().grid(row=0, column=0, padx=12, pady=12, sticky="nsew")
+
+    def mostrar_resultado_neville(self, datos):
+        self.limpiar_tabla_neville()
+        self.nev_tabla_frame.grid_columnconfigure(0, weight=1)
+
+        tarjeta = ctk.CTkFrame(
+            self.nev_tabla_frame,
+            fg_color="#172238",
+            corner_radius=10,
+            border_width=1,
+            border_color="#24344f",
+        )
+        tarjeta.grid(row=0, column=0, padx=14, pady=(14, 12), sticky="ew")
+        tarjeta.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            tarjeta,
+            text="Polinomio interpolante por Neville",
+            font=("Arial", 13, "bold"),
+            text_color="#7cc7ff",
+        ).grid(row=0, column=0, padx=16, pady=(12, 4), sticky="w")
+
+        ctk.CTkLabel(
+            tarjeta,
+            text=f"P(x) = P0,{len(datos['puntos_x']) - 1}(x) = {datos['polinomio_texto']}",
+            font=("Consolas", 13, "bold"),
+            text_color="#9fffe4",
+            wraplength=980,
+            justify="left",
+        ).grid(row=1, column=0, padx=16, pady=(0, 12), sticky="w")
+
+        tabla = ctk.CTkFrame(
+            self.nev_tabla_frame,
+            fg_color="#101216",
+            corner_radius=12,
+            border_width=1,
+            border_color="#303846",
+        )
+        tabla.grid(row=1, column=0, padx=14, pady=(0, 14), sticky="ew")
+
+        n = len(datos["puntos_x"])
+        total_columnas = n + 2
+
+        for columna in range(total_columnas):
+            tabla.grid_columnconfigure(columna, weight=1)
+
+        def nombre_p(i, j):
+            if j == 0:
+                return f"P{i}"
+            indices = ",".join(str(valor) for valor in range(i, i + j + 1))
+            return f"P{indices}"
+
+        def celda(padre, fila, columna, texto="", ancho=150, alto=34,
+                  color_fondo="#0f141b", color_texto="#e8edf7",
+                  fuente=("Arial", 11, "bold"), wrap=230):
+            etiqueta = ctk.CTkLabel(
+                padre,
+                text=texto,
+                font=fuente,
+                text_color=color_texto,
+                fg_color=color_fondo,
+                corner_radius=6,
+                width=ancho,
+                height=alto,
+                wraplength=wrap,
+                justify="center",
+            )
+            etiqueta.grid(row=fila, column=columna, padx=3, pady=3, sticky="ew")
+            return etiqueta
+
+        encabezados = ["n", "xᵢ", "Pᵢ = f(xᵢ)"]
+        for orden in range(1, n):
+            encabezados.append(f"Pᵢ,...,ᵢ+{orden}")
+
+        for columna, texto in enumerate(encabezados):
+            celda(
+                tabla,
+                0,
+                columna,
+                texto,
+                ancho=150,
+                alto=34,
+                color_fondo="#1f2937",
+                color_texto="#ffffff",
+                fuente=("Arial", 12, "bold"),
+            )
+
+        filas_visuales = 2 * n - 1
+        matriz = [["" for _ in range(total_columnas)] for _ in range(filas_visuales)]
+        estilos = [["vacio" for _ in range(total_columnas)] for _ in range(filas_visuales)]
+
+        for i, fila in enumerate(datos["tabla"]):
+            fila_base = 2 * i
+            matriz[fila_base][0] = f"x{i}"
+            matriz[fila_base][1] = self.formatear_numero_neville(fila["xi"], 6)
+            matriz[fila_base][2] = f"{nombre_p(i, 0)} = f(x{i})\n{self.formatear_numero_neville(fila['yi'], 6)}"
+            estilos[fila_base][0] = "dato"
+            estilos[fila_base][1] = "dato"
+            estilos[fila_base][2] = "base"
+
+            for j in range(1, n - i):
+                valor = fila["valores_q_texto"][j]
+                fila_nev = fila_base + j
+                columna_nev = j + 2
+                matriz[fila_nev][columna_nev] = f"{nombre_p(i, j)}(x)\n{valor}"
+
+                if i == 0 and j == n - 1:
+                    estilos[fila_nev][columna_nev] = "final"
+                else:
+                    estilos[fila_nev][columna_nev] = "calculado"
+
+        for fila_indice in range(filas_visuales):
+            for columna in range(total_columnas):
+                estilo = estilos[fila_indice][columna]
+                texto = matriz[fila_indice][columna]
+
+                if estilo == "vacio":
+                    color_fondo = "#0f141b"
+                    color_texto = "#0f141b"
+                    fuente = ("Arial", 11, "bold")
+                    alto = 30
+                    wrap = 160
+                elif estilo == "dato":
+                    color_fondo = "#101827"
+                    color_texto = "#ffffff"
+                    fuente = ("Arial", 12, "bold")
+                    alto = 34
+                    wrap = 160
+                elif estilo == "base":
+                    color_fondo = "#172238"
+                    color_texto = "#9fffe4"
+                    fuente = ("Arial", 12, "bold")
+                    alto = 46
+                    wrap = 190
+                elif estilo == "final":
+                    color_fondo = "#1d3a63"
+                    color_texto = "#9fffe4"
+                    fuente = ("Arial", 12, "bold")
+                    alto = 58
+                    wrap = 260
+                else:
+                    color_fondo = "#172238"
+                    color_texto = "#e8edf7"
+                    fuente = ("Arial", 11, "bold")
+                    alto = 54
+                    wrap = 260
+
+                celda(
+                    tabla,
+                    fila_indice + 1,
+                    columna,
+                    texto,
+                    ancho=150,
+                    alto=alto,
+                    color_fondo=color_fondo,
+                    color_texto=color_texto,
+                    fuente=fuente,
+                    wrap=wrap,
+                )
+
+        procedimiento = ctk.CTkTextbox(
+            self.nev_tabla_frame,
+            height=280,
+            wrap="word",
+            corner_radius=12,
+            fg_color="#101216",
+            border_width=1,
+            border_color="#303846",
+            text_color="#e8edf7",
+            font=("Consolas", 13),
+        )
+        procedimiento.grid(row=2, column=0, padx=14, pady=(0, 18), sticky="ew")
+
+        texto = ""
+        texto += "Fórmula general de Neville usando P:\n"
+        texto += "Pᵢ(x) = f(xᵢ)\n"
+        texto += "Pᵢ,...,ᵢ+j(x) = ((x - xᵢ+j)Pᵢ,...,ᵢ+j-1(x) - (x - xᵢ)Pᵢ+1,...,ᵢ+j(x)) / (xᵢ - xᵢ+j)\n\n"
+
+        texto += "Evaluaciones iniciales:\n"
+        for i, (xi, yi) in enumerate(zip(datos["puntos_x"], datos["puntos_y"])):
+            texto += f"P{i} = f({self.formatear_numero_neville(xi, 6)}) = {self.formatear_numero_neville(yi, 6)}\n"
+
+        texto += "\nPolinomio final:\n"
+        texto += f"P(x) = P0,{len(datos['puntos_x']) - 1}(x) = {datos['polinomio_texto']}\n"
+
+        procedimiento.insert("1.0", texto)
+        procedimiento.configure(state="disabled")
+
+    def mostrar_error_neville(self, mensaje):
+        self.limpiar_tabla_neville()
+
+        ctk.CTkLabel(
+            self.nev_tabla_frame,
+            text="No se pudo calcular",
+            font=("Arial", 18, "bold"),
+            text_color="#ffffff",
+        ).grid(row=0, column=0, padx=18, pady=(18, 6), sticky="w")
+
+        ctk.CTkLabel(
+            self.nev_tabla_frame,
+            text=mensaje,
+            font=("Arial", 14),
+            text_color="#fca5a5",
+            wraplength=620,
+            justify="left",
+        ).grid(row=1, column=0, padx=18, pady=(0, 18), sticky="w")
+
 
     # =========================================================
     # CALCULO
