@@ -119,6 +119,10 @@ ALIAS_METODOS = {
 
     "Extrapolación en derivación": "Extrapolación en derivación",
     "Extrapolacion en derivacion": "Extrapolación en derivación",
+    "Legendre simple": "Cuadratura de Gauss-Legendre simple",
+    "Legendre compuesto": "Cuadratura de Gauss-Legendre compuesta",
+    "Integral doble por Trapecio": "Integral doble (Trapecio)",
+    "Integral doble por Simpson 1/3": "Integral doble (Simpson 1/3)",
 }
 
 
@@ -174,6 +178,9 @@ class App(ctk.CTk):
     def limpiar_pantalla(self):
         for widget in self.winfo_children():
             widget.destroy()
+        for indice in range(6):
+            self.grid_rowconfigure(indice, weight=0)
+            self.grid_columnconfigure(indice, weight=0)
 
     def crear_label(self, padre, texto, tamano=14, peso="normal", color="#e8edf7"):
         return ctk.CTkLabel(
@@ -473,6 +480,20 @@ class App(ctk.CTk):
             self.mostrar_diferencias_divididas()
             return
 
+        if getattr(self.metodo_actual, "categoria", "") == "Integración":
+            nombres_param = [p.get("nombre") for p in getattr(self.metodo_actual, "parametros", [])]
+            if "d" not in nombres_param:   # las integrales dobles tienen 'd'; esas se quedan en la pantalla normal
+                self.mostrar_integracion()
+                return
+            
+        if getattr(self.metodo_actual, "categoria", "") == "Integración":
+            nombres_param = [p.get("nombre") for p in getattr(self.metodo_actual, "parametros", [])]
+            if "d" in nombres_param:
+                self.mostrar_integracion_doble()
+            else:
+                self.mostrar_integracion()
+            return
+
         self.mostrar_pantalla_metodo()
 
     def mostrar_error_metodo(self, nombre_metodo):
@@ -680,6 +701,650 @@ class App(ctk.CTk):
             entrada.grid(row=i * 2 + 1, column=0, padx=18, pady=(0, 8), sticky="ew")
 
             self.entradas[parametro["nombre"]] = entrada
+
+    def construir_funcion_numpy_integracion(self, expresion):
+        x = sp.symbols("x")
+        expr = sp.sympify(expresion)
+        return sp.lambdify(x, expr, "numpy")
+
+    def mostrar_integracion(self):
+        self.limpiar_pantalla()
+
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)
+
+        encabezado = ctk.CTkFrame(self, fg_color="#102d52", corner_radius=0, border_width=0)
+        encabezado.grid(row=0, column=0, sticky="ew")
+        encabezado.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkButton(
+            encabezado,
+            text="← Inicio",
+            command=self.mostrar_inicio,
+            width=110,
+            height=34,
+            fg_color="#1a1f2b",
+            hover_color="#243044",
+            border_width=1,
+            border_color="#496386",
+        ).grid(row=0, column=0, padx=22, pady=18, sticky="w")
+
+        self.crear_label(
+            encabezado,
+            self.metodo_actual.nombre,
+            tamano=26,
+            peso="bold",
+            color="#ffffff",
+        ).grid(row=0, column=1, padx=10, pady=18, sticky="w")
+
+        cuerpo = ctk.CTkFrame(self, fg_color="transparent")
+        cuerpo.grid(row=1, column=0, padx=28, pady=24, sticky="nsew")
+        cuerpo.grid_columnconfigure(0, weight=1)
+        cuerpo.grid_columnconfigure(1, weight=1)
+        cuerpo.grid_rowconfigure(0, weight=1)
+
+        # ---------- Panel izquierdo: formulario ----------
+        panel_formulario = ctk.CTkFrame(
+            cuerpo, fg_color="#101216", corner_radius=16,
+            border_width=1, border_color="#303846",
+        )
+        panel_formulario.grid(row=0, column=0, padx=(0, 10), sticky="nsew")
+        panel_formulario.grid_columnconfigure(0, weight=1)
+        panel_formulario.grid_rowconfigure(3, weight=1)
+
+        self.crear_label(
+            panel_formulario, "DATOS DE ENTRADA", tamano=11, peso="bold", color="#75b8ff",
+        ).grid(row=0, column=0, padx=24, pady=(24, 0), sticky="w")
+
+        self.crear_label(
+            panel_formulario, self.metodo_actual.descripcion, tamano=14, color="#cbd5e1",
+        ).grid(row=1, column=0, padx=24, pady=(6, 16), sticky="w")
+
+        self.frame_formulario = ctk.CTkScrollableFrame(
+            panel_formulario, fg_color="#151a22", corner_radius=12,
+            border_width=1, border_color="#2a3342",
+        )
+        self.frame_formulario.grid(row=3, column=0, padx=24, pady=(0, 14), sticky="nsew")
+        self.frame_formulario.grid_columnconfigure(0, weight=1)
+
+        self.construir_formulario()  # reutiliza el formulario generico (define self.entradas)
+
+        # Teclado para escribir f(x) (inserta en el campo "funcion")
+        self.construir_calculadora_integracion(panel_formulario, 2)
+
+        ctk.CTkButton(
+            panel_formulario, text="Ver gráfica", command=self.graficar_integracion_desde_formulario,
+            height=40, corner_radius=10, font=("Arial", 14, "bold"),
+            fg_color="#1a1f2b", hover_color="#243044", border_width=1, border_color="#496386",
+        ).grid(row=4, column=0, padx=24, pady=(0, 8), sticky="ew")
+
+        ctk.CTkButton(
+            panel_formulario, text="Calcular", command=self.calcular_integracion,
+            height=44, corner_radius=10, font=("Arial", 15, "bold"),
+            fg_color="#1f6feb", hover_color="#1959bd",
+        ).grid(row=5, column=0, padx=24, pady=(0, 24), sticky="ew")
+
+        # ---------- Panel derecho: gráfica + resultado ----------
+        panel_resultado = ctk.CTkFrame(
+            cuerpo, fg_color="#101216", corner_radius=16,
+            border_width=1, border_color="#303846",
+        )
+        panel_resultado.grid(row=0, column=1, padx=(10, 0), sticky="nsew")
+        panel_resultado.grid_columnconfigure(0, weight=1)
+        panel_resultado.grid_rowconfigure(3, weight=1)
+
+        self.crear_label(
+            panel_resultado, "GRÁFICA", tamano=11, peso="bold", color="#75b8ff",
+        ).grid(row=0, column=0, padx=22, pady=(22, 0), sticky="w")
+
+        self.int_grafica_frame = ctk.CTkFrame(
+            panel_resultado, fg_color="#151a22", corner_radius=12,
+            border_width=1, border_color="#2a3342",
+        )
+        self.int_grafica_frame.grid(row=1, column=0, padx=22, pady=(10, 14), sticky="ew")
+        self.int_grafica_frame.grid_columnconfigure(0, weight=1)
+
+        self.crear_label(
+            self.int_grafica_frame,
+            "Aquí aparecerá f(x) y el área aproximada bajo la curva.",
+            tamano=14, color="#cbd5e1",
+        ).grid(row=0, column=0, padx=18, pady=18, sticky="w")
+
+        self.crear_label(
+            panel_resultado, "RESULTADO", tamano=11, peso="bold", color="#75b8ff",
+        ).grid(row=2, column=0, padx=22, pady=(4, 0), sticky="w")
+
+        self.int_resultado_frame = ctk.CTkScrollableFrame(
+            panel_resultado, fg_color="#151a22", corner_radius=12,
+            border_width=1, border_color="#2a3342",
+        )
+        self.int_resultado_frame.grid(row=3, column=0, padx=22, pady=(10, 22), sticky="nsew")
+        self.int_resultado_frame.grid_columnconfigure(0, weight=1)
+
+        self.crear_label(
+            self.int_resultado_frame,
+            "Llena los datos y presiona Calcular.",
+            tamano=14, color="#cbd5e1",
+        ).grid(row=0, column=0, padx=16, pady=16, sticky="w")
+
+    def construir_calculadora_integracion(self, padre, fila):
+        calculadora = ctk.CTkFrame(
+            padre, fg_color="#151a22", corner_radius=14,
+            border_width=1, border_color="#2a3342",
+        )
+        calculadora.grid(row=fila, column=0, padx=24, pady=(0, 12), sticky="ew")
+        for columna in range(4):
+            calculadora.grid_columnconfigure(columna, weight=1)
+
+        botones = [
+            ("x", "x"), ("sin", "sin("), ("cos", "cos("), ("C", "clear"),
+            ("+", "+"), ("-", "-"), ("×", "*"), ("÷", "/"),
+            ("x²", "**2"), ("xʸ", "**"), ("eˣ", "exp("), ("ln", "log("),
+            ("(", "("), (")", ")"), ("π", "pi"), ("⌫", "back"),
+        ]
+
+        for i, (texto, valor) in enumerate(botones):
+            fila_boton = i // 4
+            columna_boton = i % 4
+
+            if valor == "clear":
+                comando = self.limpiar_funcion_integracion
+                color, hover = "#dc2626", "#b91c1c"
+            elif valor == "back":
+                comando = self.borrar_funcion_integracion
+                color, hover = "#0ea5e9", "#0284c7"
+            else:
+                comando = lambda v=valor: self.insertar_funcion_integracion(v)
+                color, hover = "#1a1f2b", "#243044"
+
+            ctk.CTkButton(
+                calculadora, text=texto, command=comando,
+                height=42, corner_radius=9, fg_color=color, hover_color=hover,
+                border_width=1, border_color="#343c4c", text_color="#ffffff",
+                font=("Arial", 14, "bold"),
+            ).grid(row=fila_boton, column=columna_boton, padx=6, pady=6, sticky="ew")
+
+    def insertar_funcion_integracion(self, texto):
+        entrada = self.entradas.get("funcion")
+        if entrada is None:
+            return
+        entrada.insert("end", texto)
+        entrada.focus()
+
+    def limpiar_funcion_integracion(self):
+        entrada = self.entradas.get("funcion")
+        if entrada is None:
+            return
+        entrada.delete(0, "end")
+        entrada.focus()
+
+    def borrar_funcion_integracion(self):
+        entrada = self.entradas.get("funcion")
+        if entrada is None:
+            return
+        texto = entrada.get()
+        entrada.delete(0, "end")
+        entrada.insert(0, texto[:-1])
+        entrada.focus()
+
+    def limpiar_grafica_integracion(self):
+        for widget in self.int_grafica_frame.winfo_children():
+            widget.destroy()
+
+    def graficar_integracion_desde_formulario(self):
+        try:
+            datos = {n: e.get() for n, e in self.entradas.items()}
+            f_numpy = self.construir_funcion_numpy_integracion(datos["funcion"])
+            a = float(datos["a"])
+            b = float(datos["b"])
+            self.dibujar_grafica_integracion(f_numpy, a, b, nodos=None, es_trapecio=False)
+        except Exception as error:
+            self.mostrar_error_integracion(f"No se pudo graficar: {error}")
+
+    def calcular_integracion(self):
+        try:
+            datos = {n: e.get() for n, e in self.entradas.items()}
+            resultado = self.metodo_actual.ejecutar(**datos)
+
+            # Construye la funcion para graficar
+            f_numpy = self.construir_funcion_numpy_integracion(datos["funcion"])
+            a = float(datos["a"])
+            b = float(datos["b"])
+
+            # Extrae los nodos x de la tabla (cada metodo usa su propia llave)
+            nodos = []
+            for fila in resultado.tabla:
+                if "x" in fila:
+                    nodos.append(fila["x"])
+                elif "x en [a,b]" in fila:
+                    nodos.append(fila["x en [a,b]"])
+            nodos = nodos or None
+
+            nombre = self.metodo_actual.nombre.lower()
+            es_trapecio = "trapecio" in nombre
+
+            self.dibujar_grafica_integracion(f_numpy, a, b, nodos=nodos, es_trapecio=es_trapecio)
+            self.mostrar_resultado_integracion(resultado)
+        except Exception as error:
+            self.mostrar_error_integracion(f"Error al ejecutar el método:\n{error}")
+
+    def dibujar_grafica_integracion(self, funcion_numpy, a, b, nodos=None, es_trapecio=False):
+        self.limpiar_grafica_integracion()
+
+        a = float(a)
+        b = float(b)
+        izq, der = min(a, b), max(a, b)
+        ancho = der - izq or 1.0
+        margen = ancho * 0.18
+        x_min, x_max = izq - margen, der + margen
+
+        def f_escalar(valor):
+            return float(funcion_numpy(float(valor)))
+
+        xs = np.linspace(x_min, x_max, 900)
+        with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+            try:
+                ys = np.array(funcion_numpy(xs), dtype=float)
+            except Exception:
+                ys = np.array([f_escalar(v) for v in xs], dtype=float)
+
+        mascara = np.isfinite(ys)
+        xs_v, ys_v = xs[mascara], ys[mascara]
+        if len(xs_v) == 0:
+            self.mostrar_error_integracion("No se pudo graficar la función en ese intervalo.")
+            return
+
+        figura = Figure(figsize=(7.6, 4.0), dpi=100)
+        figura.patch.set_facecolor("#151a22")
+        eje = figura.add_subplot(111)
+        eje.set_facecolor("#101216")
+
+        # Área real bajo la curva entre a y b
+        xa = np.linspace(izq, der, 400)
+        ya = np.array([f_escalar(v) for v in xa], dtype=float)
+        eje.fill_between(xa, ya, 0, color="#1f6feb", alpha=0.25, label="Área aproximada")
+
+        eje.plot(xs_v, ys_v, linewidth=2, color="#7cc7ff", label="f(x)")
+        eje.axhline(0, color="#ffffff", linewidth=1, alpha=0.6)
+
+        if nodos:
+            try:
+                nodos = [float(n) for n in nodos]
+                fnodos = [f_escalar(n) for n in nodos]
+                if es_trapecio:
+                    # dibuja los trapecios (unión recta entre nodos)
+                    eje.plot(nodos, fnodos, color="#f59e0b", linewidth=1.5, linestyle="--")
+                    for i in range(len(nodos) - 1):
+                        eje.fill_between(
+                            [nodos[i], nodos[i + 1]],
+                            [fnodos[i], fnodos[i + 1]],
+                            0, facecolor="none", edgecolor="#f59e0b", linewidth=1.1,
+                        )
+                eje.scatter(nodos, fnodos, color="#22c55e", s=55, zorder=6, label="Nodos")
+                for xv in nodos:
+                    eje.axvline(xv, color="#22c55e", linewidth=0.8, alpha=0.22)
+            except Exception:
+                pass
+
+        for punto, color, etiqueta in [(a, "#ef4444", "a"), (b, "#f28c28", "b")]:
+            eje.axvline(punto, color=color, linewidth=1.2, alpha=0.6)
+            eje.annotate(
+                etiqueta, (punto, 0), textcoords="offset points", xytext=(0, 9),
+                ha="center", color=color, fontsize=12, fontweight="bold",
+            )
+
+        eje.set_xlim(x_min, x_max)
+        eje.grid(True, alpha=0.25)
+        eje.tick_params(colors="#dbeafe")
+        for spine in eje.spines.values():
+            spine.set_color("#64748b")
+
+        eje.set_title("Área bajo la curva", color="#ffffff", fontsize=13, fontweight="bold")
+        eje.set_xlabel("x", color="#dbeafe")
+        eje.set_ylabel("f(x)", color="#dbeafe")
+
+        leyenda = eje.legend()
+        if leyenda:
+            leyenda.get_frame().set_facecolor("#151a22")
+            leyenda.get_frame().set_edgecolor("#344054")
+            for texto in leyenda.get_texts():
+                texto.set_color("#ffffff")
+
+        figura.tight_layout()
+
+        canvas = FigureCanvasTkAgg(figura, master=self.int_grafica_frame)
+        canvas.draw()
+        canvas.get_tk_widget().grid(row=0, column=0, padx=12, pady=12, sticky="nsew")
+
+    def mostrar_resultado_integracion(self, resultado):
+        for widget in self.int_resultado_frame.winfo_children():
+            widget.destroy()
+
+        self.int_resultado_frame.grid_columnconfigure(0, weight=1)
+        fila_actual = 0
+
+        # Tarjeta con el resultado final
+        if resultado.resultado is not None:
+            tarjeta = ctk.CTkFrame(
+                self.int_resultado_frame, fg_color="#172238", corner_radius=10,
+                border_width=1, border_color="#24344f",
+            )
+            tarjeta.grid(row=fila_actual, column=0, padx=14, pady=(14, 10), sticky="ew")
+            tarjeta.grid_columnconfigure(0, weight=1)
+            fila_actual += 1
+
+            ctk.CTkLabel(
+                tarjeta, text="Integral aproximada I ≈",
+                font=("Arial", 13, "bold"), text_color="#7cc7ff",
+            ).grid(row=0, column=0, padx=16, pady=(12, 2), sticky="w")
+
+            ctk.CTkLabel(
+                tarjeta, text=str(resultado.resultado),
+                font=("Arial", 24, "bold"), text_color="#9fffe4",
+            ).grid(row=1, column=0, padx=16, pady=(0, 6), sticky="w")
+
+            ctk.CTkLabel(
+                tarjeta, text=resultado.mensaje,
+                font=("Arial", 13, "bold"), text_color="#ffffff",
+                wraplength=560, justify="left",
+            ).grid(row=2, column=0, padx=16, pady=(0, 12), sticky="w")
+
+        # Procedimiento
+        if resultado.pasos:
+            ctk.CTkLabel(
+                self.int_resultado_frame, text="PROCEDIMIENTO",
+                font=("Arial", 11, "bold"), text_color="#75b8ff",
+            ).grid(row=fila_actual, column=0, padx=16, pady=(8, 4), sticky="w")
+            fila_actual += 1
+
+            texto_pasos = "\n".join(f"{i}. {paso}" for i, paso in enumerate(resultado.pasos, start=1))
+            ctk.CTkLabel(
+                self.int_resultado_frame, text=texto_pasos,
+                font=("Consolas", 13), text_color="#e8edf7",
+                justify="left", wraplength=560,
+            ).grid(row=fila_actual, column=0, padx=16, pady=(0, 12), sticky="w")
+            fila_actual += 1
+
+        # Tabla
+        if resultado.tabla:
+            ctk.CTkLabel(
+                self.int_resultado_frame, text="TABLA",
+                font=("Arial", 11, "bold"), text_color="#75b8ff",
+            ).grid(row=fila_actual, column=0, padx=16, pady=(8, 4), sticky="w")
+            fila_actual += 1
+
+            tabla = ctk.CTkFrame(
+                self.int_resultado_frame, fg_color="#101216", corner_radius=12,
+                border_width=1, border_color="#303846",
+            )
+            tabla.grid(row=fila_actual, column=0, padx=14, pady=(0, 14), sticky="ew")
+            fila_actual += 1
+
+            encabezados = list(resultado.tabla[0].keys())
+            for columna, texto in enumerate(encabezados):
+                ctk.CTkLabel(
+                    tabla, text=str(texto), font=("Arial", 12, "bold"),
+                    text_color="#ffffff", fg_color="#1f2937", corner_radius=6,
+                    width=90, height=30,
+                ).grid(row=0, column=columna, padx=3, pady=4, sticky="ew")
+
+            for indice, fila in enumerate(resultado.tabla, start=1):
+                for columna, clave in enumerate(encabezados):
+                    ctk.CTkLabel(
+                        tabla, text=str(fila.get(clave, "")), font=("Arial", 12),
+                        text_color="#e8edf7", fg_color="#151a22", corner_radius=6,
+                        width=90, height=28,
+                    ).grid(row=indice, column=columna, padx=3, pady=3, sticky="ew")
+
+    def mostrar_error_integracion(self, mensaje):
+        for widget in self.int_resultado_frame.winfo_children():
+            widget.destroy()
+
+        ctk.CTkLabel(
+            self.int_resultado_frame, text="No se pudo calcular",
+            font=("Arial", 18, "bold"), text_color="#ffffff",
+        ).grid(row=0, column=0, padx=18, pady=(18, 6), sticky="w")
+
+        ctk.CTkLabel(
+            self.int_resultado_frame, text=mensaje,
+            font=("Arial", 14), text_color="#fca5a5",
+            wraplength=560, justify="left",
+        ).grid(row=1, column=0, padx=18, pady=(0, 18), sticky="w")
+
+
+    # =========================================================
+    # PANTALLA ESPECIAL: INTEGRAL DOBLE (con superficie 3D)
+    # =========================================================
+
+    def construir_funcion_2var_integracion(self, expresion):
+        x, y = sp.symbols("x y")
+        expr = sp.sympify(expresion)
+        return sp.lambdify((x, y), expr, "numpy")
+
+    def mostrar_integracion_doble(self):
+        self.limpiar_pantalla()
+
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)
+
+        encabezado = ctk.CTkFrame(self, fg_color="#102d52", corner_radius=0, border_width=0)
+        encabezado.grid(row=0, column=0, sticky="ew")
+        encabezado.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkButton(
+            encabezado, text="← Inicio", command=self.mostrar_inicio,
+            width=110, height=34, fg_color="#1a1f2b", hover_color="#243044",
+            border_width=1, border_color="#496386",
+        ).grid(row=0, column=0, padx=22, pady=18, sticky="w")
+
+        self.crear_label(
+            encabezado, self.metodo_actual.nombre, tamano=26, peso="bold", color="#ffffff",
+        ).grid(row=0, column=1, padx=10, pady=18, sticky="w")
+
+        cuerpo = ctk.CTkFrame(self, fg_color="transparent")
+        cuerpo.grid(row=1, column=0, padx=28, pady=24, sticky="nsew")
+        cuerpo.grid_columnconfigure(0, weight=1)
+        cuerpo.grid_columnconfigure(1, weight=1)
+        cuerpo.grid_rowconfigure(0, weight=1)
+
+        # ---------- Panel izquierdo ----------
+        panel_formulario = ctk.CTkFrame(
+            cuerpo, fg_color="#101216", corner_radius=16,
+            border_width=1, border_color="#303846",
+        )
+        panel_formulario.grid(row=0, column=0, padx=(0, 10), sticky="nsew")
+        panel_formulario.grid_columnconfigure(0, weight=1)
+        panel_formulario.grid_rowconfigure(3, weight=1)
+
+        self.crear_label(
+            panel_formulario, "DATOS DE ENTRADA", tamano=11, peso="bold", color="#75b8ff",
+        ).grid(row=0, column=0, padx=24, pady=(24, 0), sticky="w")
+
+        self.crear_label(
+            panel_formulario, self.metodo_actual.descripcion, tamano=14, color="#cbd5e1",
+        ).grid(row=1, column=0, padx=24, pady=(6, 16), sticky="w")
+
+        self.frame_formulario = ctk.CTkScrollableFrame(
+            panel_formulario, fg_color="#151a22", corner_radius=12,
+            border_width=1, border_color="#2a3342",
+        )
+        self.frame_formulario.grid(row=3, column=0, padx=24, pady=(0, 14), sticky="nsew")
+        self.frame_formulario.grid_columnconfigure(0, weight=1)
+
+        self.construir_formulario()  # crea funcion, a, b, c, d, nx, ny en self.entradas
+
+        # Teclado con botón "y" (porque la función es de dos variables)
+        self.construir_calculadora_integracion_doble(panel_formulario, 2)
+
+        ctk.CTkButton(
+            panel_formulario, text="Ver superficie",
+            command=self.graficar_integracion_doble_desde_formulario,
+            height=40, corner_radius=10, font=("Arial", 14, "bold"),
+            fg_color="#1a1f2b", hover_color="#243044", border_width=1, border_color="#496386",
+        ).grid(row=4, column=0, padx=24, pady=(0, 8), sticky="ew")
+
+        ctk.CTkButton(
+            panel_formulario, text="Calcular", command=self.calcular_integracion_doble,
+            height=44, corner_radius=10, font=("Arial", 15, "bold"),
+            fg_color="#1f6feb", hover_color="#1959bd",
+        ).grid(row=5, column=0, padx=24, pady=(0, 24), sticky="ew")
+
+        # ---------- Panel derecho ----------
+        panel_resultado = ctk.CTkFrame(
+            cuerpo, fg_color="#101216", corner_radius=16,
+            border_width=1, border_color="#303846",
+        )
+        panel_resultado.grid(row=0, column=1, padx=(10, 0), sticky="nsew")
+        panel_resultado.grid_columnconfigure(0, weight=1)
+        panel_resultado.grid_rowconfigure(3, weight=1)
+
+        self.crear_label(
+            panel_resultado, "GRÁFICA", tamano=11, peso="bold", color="#75b8ff",
+        ).grid(row=0, column=0, padx=22, pady=(22, 0), sticky="w")
+
+        # Reutiliza el mismo nombre de frame que la pantalla simple
+        self.int_grafica_frame = ctk.CTkFrame(
+            panel_resultado, fg_color="#151a22", corner_radius=12,
+            border_width=1, border_color="#2a3342",
+        )
+        self.int_grafica_frame.grid(row=1, column=0, padx=22, pady=(10, 14), sticky="ew")
+        self.int_grafica_frame.grid_columnconfigure(0, weight=1)
+
+        self.crear_label(
+            self.int_grafica_frame,
+            "Aquí aparecerá la superficie f(x, y) sobre la región [a,b]×[c,d].",
+            tamano=14, color="#cbd5e1",
+        ).grid(row=0, column=0, padx=18, pady=18, sticky="w")
+
+        self.crear_label(
+            panel_resultado, "RESULTADO", tamano=11, peso="bold", color="#75b8ff",
+        ).grid(row=2, column=0, padx=22, pady=(4, 0), sticky="w")
+
+        self.int_resultado_frame = ctk.CTkScrollableFrame(
+            panel_resultado, fg_color="#151a22", corner_radius=12,
+            border_width=1, border_color="#2a3342",
+        )
+        self.int_resultado_frame.grid(row=3, column=0, padx=22, pady=(10, 22), sticky="nsew")
+        self.int_resultado_frame.grid_columnconfigure(0, weight=1)
+
+        self.crear_label(
+            self.int_resultado_frame, "Llena los datos y presiona Calcular.",
+            tamano=14, color="#cbd5e1",
+        ).grid(row=0, column=0, padx=16, pady=16, sticky="w")
+
+    def construir_calculadora_integracion_doble(self, padre, fila):
+        calculadora = ctk.CTkFrame(
+            padre, fg_color="#151a22", corner_radius=14,
+            border_width=1, border_color="#2a3342",
+        )
+        calculadora.grid(row=fila, column=0, padx=24, pady=(0, 12), sticky="ew")
+        for columna in range(4):
+            calculadora.grid_columnconfigure(columna, weight=1)
+
+        botones = [
+            ("x", "x"), ("y", "y"), ("sin", "sin("), ("cos", "cos("),
+            ("+", "+"), ("-", "-"), ("×", "*"), ("÷", "/"),
+            ("x²", "**2"), ("xʸ", "**"), ("eˣ", "exp("), ("ln", "log("),
+            ("(", "("), (")", ")"), ("π", "pi"), ("C", "clear"),
+            ("⌫", "back"),
+        ]
+
+        for i, (texto, valor) in enumerate(botones):
+            fila_boton = i // 4
+            columna_boton = i % 4
+
+            if valor == "clear":
+                comando = self.limpiar_funcion_integracion
+                color, hover = "#dc2626", "#b91c1c"
+            elif valor == "back":
+                comando = self.borrar_funcion_integracion
+                color, hover = "#0ea5e9", "#0284c7"
+            else:
+                comando = lambda v=valor: self.insertar_funcion_integracion(v)
+                color, hover = "#1a1f2b", "#243044"
+
+            ctk.CTkButton(
+                calculadora, text=texto, command=comando,
+                height=42, corner_radius=9, fg_color=color, hover_color=hover,
+                border_width=1, border_color="#343c4c", text_color="#ffffff",
+                font=("Arial", 14, "bold"),
+            ).grid(row=fila_boton, column=columna_boton, padx=6, pady=6, sticky="ew")
+
+    def graficar_integracion_doble_desde_formulario(self):
+        try:
+            datos = {n: e.get() for n, e in self.entradas.items()}
+            funcion = self.construir_funcion_2var_integracion(datos["funcion"])
+            self.dibujar_superficie_integracion_doble(
+                funcion, datos["a"], datos["b"], datos["c"], datos["d"],
+            )
+        except Exception as error:
+            self.mostrar_error_integracion(f"No se pudo graficar: {error}")
+
+    def calcular_integracion_doble(self):
+        try:
+            datos = {n: e.get() for n, e in self.entradas.items()}
+            resultado = self.metodo_actual.ejecutar(**datos)
+
+            funcion = self.construir_funcion_2var_integracion(datos["funcion"])
+            self.dibujar_superficie_integracion_doble(
+                funcion, datos["a"], datos["b"], datos["c"], datos["d"],
+            )
+            self.mostrar_resultado_integracion(resultado)
+        except Exception as error:
+            self.mostrar_error_integracion(f"Error al ejecutar el método:\n{error}")
+
+    def dibujar_superficie_integracion_doble(self, funcion, a, b, c, d):
+        self.limpiar_grafica_integracion()
+
+        from mpl_toolkits import mplot3d  # registra la proyección 3d
+
+        a, b, c, d = float(a), float(b), float(c), float(d)
+        n = 40
+        xs = np.linspace(min(a, b), max(a, b), n)
+        ys = np.linspace(min(c, d), max(c, d), n)
+        X, Y = np.meshgrid(xs, ys)
+
+        def escalar(xx, yy):
+            return float(funcion(float(xx), float(yy)))
+
+        with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+            try:
+                Z = np.array(funcion(X, Y), dtype=float)
+                if Z.shape != X.shape:
+                    raise ValueError
+            except Exception:
+                Z = np.array([[escalar(xx, yy) for xx in xs] for yy in ys], dtype=float)
+
+        if not np.any(np.isfinite(Z)):
+            self.mostrar_error_integracion("No se pudo graficar la función en esa región.")
+            return
+
+        figura = Figure(figsize=(7.6, 4.4), dpi=100)
+        figura.patch.set_facecolor("#151a22")
+        eje = figura.add_subplot(111, projection="3d")
+        eje.set_facecolor("#101216")
+
+        eje.plot_surface(X, Y, Z, cmap="viridis", edgecolor="none", alpha=0.92)
+
+        eje.set_title("Superficie f(x, y) sobre la región", color="#ffffff",
+                      fontsize=12, fontweight="bold")
+        eje.set_xlabel("x", color="#dbeafe")
+        eje.set_ylabel("y", color="#dbeafe")
+        eje.set_zlabel("f(x, y)", color="#dbeafe")
+        eje.tick_params(colors="#dbeafe")
+
+        for panel in (eje.xaxis, eje.yaxis, eje.zaxis):
+            try:
+                panel.set_pane_color((0.06, 0.07, 0.09, 1.0))
+            except Exception:
+                pass
+
+        figura.tight_layout()
+
+        canvas = FigureCanvasTkAgg(figura, master=self.int_grafica_frame)
+        canvas.draw()
+        canvas.get_tk_widget().grid(row=0, column=0, padx=12, pady=12, sticky="nsew")
+
     # =========================================================
     # PANTALLA ESPECIAL: PUNTO FLOTANTE
     # =========================================================
