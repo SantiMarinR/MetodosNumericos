@@ -469,6 +469,10 @@ class App(ctk.CTk):
         if self.normalizar(nombre_metodo) == self.normalizar("Neville"):
             self.mostrar_neville()
             return
+        
+        if self.normalizar(nombre_metodo) == self.normalizar("Extrapolación"):
+            self.mostrar_extrapolacion_interp()
+            return
 
         if (
             self.normalizar(nombre_metodo) == self.normalizar("Diferencias divididas")
@@ -492,6 +496,44 @@ class App(ctk.CTk):
                 self.mostrar_integracion_doble()
             else:
                 self.mostrar_integracion()
+            return
+        
+        
+
+        if self.normalizar(nombre_metodo) == self.normalizar("2 puntos"):
+            self.mostrar_dos_puntos()
+            return
+        
+        if self.normalizar(nombre_metodo) == self.normalizar("3 puntos"):
+            self.mostrar_tres_puntos()
+            return
+        if self.normalizar(nombre_metodo) == self.normalizar("5 puntos"):
+            self.mostrar_cinco_puntos()
+            return
+        if self.normalizar(nombre_metodo) in (
+            self.normalizar("Extrapolación en derivación"),
+            self.normalizar("Extrapolacion en derivacion"),
+        ):
+            self.mostrar_extrapolacion_deriv()
+            return
+        if self.normalizar(nombre_metodo) in (
+            self.normalizar("Mínimos cuadrados"), self.normalizar("Minimos cuadrados"),
+        ):
+            self.mostrar_minimos()
+            return
+        if self.normalizar(nombre_metodo) == self.normalizar("Ajuste exponencial"):
+            self.mostrar_ajuste_exp()
+            return
+        if self.normalizar(nombre_metodo) in (
+            self.normalizar("Ajuste logarítmico"), self.normalizar("Ajuste logaritmico"),
+        ):
+            self.mostrar_ajuste_log()
+            return
+        if self.normalizar(nombre_metodo) == self.normalizar("Polinomio de Taylor"):
+            self.mostrar_taylor()
+            return
+        if self.normalizar(nombre_metodo) == self.normalizar("Desarrollo en polinomios"):
+            self.mostrar_desarrollo()
             return
 
         self.mostrar_pantalla_metodo()
@@ -7308,3 +7350,906 @@ class App(ctk.CTk):
                 "1.0",
                 f"Error al ejecutar el método:\n{error}"
             )
+
+
+# =========================================================
+    # PANTALLA ESPECIAL: DERIVACIÓN POR 2 PUNTOS
+    # =========================================================
+
+    def mostrar_dos_puntos(self):
+        self.limpiar_pantalla()
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)
+
+        encabezado = ctk.CTkFrame(self, fg_color="#102d52", corner_radius=0, border_width=0)
+        encabezado.grid(row=0, column=0, sticky="ew")
+        encabezado.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkButton(
+            encabezado, text="← Inicio", command=self.mostrar_inicio,
+            width=110, height=34, fg_color="#1a1f2b", hover_color="#243044",
+            border_width=1, border_color="#496386",
+        ).grid(row=0, column=0, padx=22, pady=18, sticky="w")
+
+        self.crear_label(
+            encabezado, self.metodo_actual.nombre, tamano=26, peso="bold", color="#ffffff",
+        ).grid(row=0, column=1, padx=10, pady=18, sticky="w")
+
+        cuerpo = ctk.CTkFrame(self, fg_color="transparent")
+        cuerpo.grid(row=1, column=0, padx=28, pady=24, sticky="nsew")
+        cuerpo.grid_columnconfigure(0, weight=1)
+        cuerpo.grid_columnconfigure(1, weight=1)
+        cuerpo.grid_rowconfigure(0, weight=1)
+
+        # ---------- PANEL IZQUIERDO: ENTRADA ----------
+        panel_entrada = ctk.CTkScrollableFrame(
+            cuerpo, fg_color="#101216", corner_radius=16,
+            border_width=1, border_color="#303846",
+        )
+        panel_entrada.grid(row=0, column=0, padx=(0, 10), pady=0, sticky="nsew")
+        panel_entrada.grid_columnconfigure(0, weight=1)
+
+        self.crear_label(
+            panel_entrada, "DATOS DE ENTRADA", tamano=11, peso="bold", color="#75b8ff",
+        ).grid(row=0, column=0, padx=22, pady=(22, 0), sticky="w")
+
+        self.crear_label(
+            panel_entrada, self.metodo_actual.descripcion, tamano=14, color="#cbd5e1",
+        ).grid(row=1, column=0, padx=22, pady=(4, 12), sticky="w")
+
+        self.dp_funcion = self.crear_input_deriv(panel_entrada, 2, "Función f(x)", "Ejemplo: sin(x)")
+        self.construir_calculadora_deriv(panel_entrada, 4)
+        self.dp_x = self.crear_input_deriv(panel_entrada, 5, "Punto x donde derivar", "Ejemplo: 1")
+        self.dp_h = self.crear_input_deriv(panel_entrada, 7, "Paso h", "Ejemplo: 0.1")
+
+        self.crear_label(
+            panel_entrada, "Fórmula", tamano=13, peso="bold", color="#f1f5ff",
+        ).grid(row=9, column=0, padx=22, pady=(10, 4), sticky="w")
+
+        self.dp_formula = ctk.CTkOptionMenu(
+            panel_entrada,
+            values=["central", "adelante", "atras"],
+            fg_color="#0f141b", button_color="#1f6feb", button_hover_color="#1959bd",
+            text_color="#ffffff", font=("Arial", 14),
+        )
+        self.dp_formula.set("central")
+        self.dp_formula.grid(row=10, column=0, padx=22, pady=(0, 12), sticky="ew")
+
+        ctk.CTkButton(
+            panel_entrada, text="Calcular f'(x)", command=self.calcular_dos_puntos,
+            height=44, corner_radius=10, font=("Arial", 15, "bold"),
+            fg_color="#159a73", hover_color="#0f7a5d",
+        ).grid(row=11, column=0, padx=22, pady=(4, 24), sticky="ew")
+
+        # ---------- PANEL DERECHO: GRÁFICA + RESULTADO ----------
+        panel_resultado = ctk.CTkFrame(
+            cuerpo, fg_color="#101216", corner_radius=16,
+            border_width=1, border_color="#303846",
+        )
+        panel_resultado.grid(row=0, column=1, padx=(10, 0), pady=0, sticky="nsew")
+        panel_resultado.grid_columnconfigure(0, weight=1)
+        panel_resultado.grid_rowconfigure(3, weight=1)
+
+        self.crear_label(
+            panel_resultado, "GRÁFICA", tamano=11, peso="bold", color="#75b8ff",
+        ).grid(row=0, column=0, padx=22, pady=(22, 0), sticky="w")
+
+        self.dp_grafica_frame = ctk.CTkFrame(
+            panel_resultado, fg_color="#151a22", corner_radius=12,
+            border_width=1, border_color="#2a3342",
+        )
+        self.dp_grafica_frame.grid(row=1, column=0, padx=22, pady=(10, 14), sticky="ew")
+        self.dp_grafica_frame.grid_columnconfigure(0, weight=1)
+        self.crear_label(
+            self.dp_grafica_frame,
+            "Aquí aparecerá f(x) y la recta tangente en x.",
+            tamano=14, color="#cbd5e1",
+        ).grid(row=0, column=0, padx=18, pady=18, sticky="w")
+
+        self.crear_label(
+            panel_resultado, "RESULTADO", tamano=11, peso="bold", color="#75b8ff",
+        ).grid(row=2, column=0, padx=22, pady=(8, 0), sticky="w")
+
+        self.dp_resultado_frame = ctk.CTkScrollableFrame(
+            panel_resultado, fg_color="#151a22", corner_radius=12,
+            border_width=1, border_color="#2a3342",
+        )
+        self.dp_resultado_frame.grid(row=3, column=0, padx=22, pady=(10, 22), sticky="nsew")
+        self.dp_resultado_frame.grid_columnconfigure(0, weight=1)
+        self.crear_label(
+            self.dp_resultado_frame,
+            "Aquí aparecerá f'(x), el error y el procedimiento.",
+            tamano=14, color="#cbd5e1",
+        ).grid(row=0, column=0, padx=18, pady=18, sticky="w")
+
+    # ---- entradas y calculadora de símbolos (derivación) ----
+    def crear_input_deriv(self, padre, fila, texto, placeholder=""):
+        ctk.CTkLabel(
+            padre, text=texto, font=("Arial", 13, "bold"), text_color="#f1f5ff",
+        ).grid(row=fila, column=0, padx=22, pady=(10, 4), sticky="w")
+        entrada = ctk.CTkEntry(
+            padre, placeholder_text=placeholder, height=38, corner_radius=9,
+            fg_color="#0f141b", border_color="#344054", text_color="#ffffff", font=("Arial", 14),
+        )
+        entrada.grid(row=fila + 1, column=0, padx=22, pady=(0, 8), sticky="ew")
+        return entrada
+
+    def construir_calculadora_deriv(self, padre, fila):
+        calculadora = ctk.CTkFrame(
+            padre, fg_color="#151a22", corner_radius=14, border_width=1, border_color="#2a3342",
+        )
+        calculadora.grid(row=fila, column=0, padx=22, pady=(8, 10), sticky="ew")
+        for columna in range(4):
+            calculadora.grid_columnconfigure(columna, weight=1)
+        botones = [
+            ("x", "x"), ("sin", "sin("), ("cos", "cos("), ("C", "clear"),
+            ("+", "+"), ("-", "-"), ("×", "*"), ("÷", "/"),
+            ("x²", "**2"), ("xʸ", "**"), ("eˣ", "exp("), ("ln", "log("),
+            ("(", "("), (")", ")"), ("π", "pi"), ("⌫", "back"),
+        ]
+        for i, (texto, valor) in enumerate(botones):
+            fila_boton = i // 4
+            columna_boton = i % 4
+            if valor == "clear":
+                comando, color, hover = self.limpiar_funcion_deriv, "#dc2626", "#b91c1c"
+            elif valor == "back":
+                comando, color, hover = self.borrar_funcion_deriv, "#0ea5e9", "#0284c7"
+            else:
+                comando = lambda v=valor: self.insertar_funcion_deriv(v)
+                color, hover = "#1a1f2b", "#243044"
+            ctk.CTkButton(
+                calculadora, text=texto, command=comando, height=42, corner_radius=9,
+                fg_color=color, hover_color=hover, border_width=1, border_color="#343c4c",
+                text_color="#ffffff", font=("Arial", 14, "bold"),
+            ).grid(row=fila_boton, column=columna_boton, padx=6, pady=6, sticky="ew")
+
+    def insertar_funcion_deriv(self, texto):
+        self.dp_funcion.insert("end", texto)
+        self.dp_funcion.focus()
+
+    def limpiar_funcion_deriv(self):
+        self.dp_funcion.delete(0, "end")
+        self.dp_funcion.focus()
+
+    def borrar_funcion_deriv(self):
+        t = self.dp_funcion.get()
+        self.dp_funcion.delete(0, "end")
+        self.dp_funcion.insert(0, t[:-1])
+        self.dp_funcion.focus()
+
+    # ---- limpieza, cálculo, gráfica y resultado ----
+    def limpiar_grafica_dos_puntos(self):
+        for w in self.dp_grafica_frame.winfo_children():
+            w.destroy()
+
+    def limpiar_resultado_dos_puntos(self):
+        for w in self.dp_resultado_frame.winfo_children():
+            w.destroy()
+
+    def calcular_dos_puntos(self):
+        try:
+            datos = {
+                "funcion": self.dp_funcion.get(),
+                "x": self.dp_x.get(),
+                "h": self.dp_h.get(),
+                "formula": self.dp_formula.get(),
+            }
+            resultado = self.metodo_actual.ejecutar(**datos)
+            if resultado.resultado is None:
+                self.mostrar_error_dos_puntos(resultado.mensaje)
+                return
+            self.dibujar_grafica_dos_puntos(datos, resultado)
+            self.mostrar_resultado_dos_puntos(resultado)
+        except Exception as error:
+            self.mostrar_error_dos_puntos(str(error))
+
+    def dibujar_grafica_dos_puntos(self, datos, resultado):
+        self.limpiar_grafica_dos_puntos()
+
+        x = sp.symbols("x")
+        expr = sp.sympify(str(datos["funcion"]).replace("^", "**"))
+        f = sp.lambdify(x, expr, "numpy")
+        x0 = float(datos["x"])
+        h = float(datos["h"])
+        m_aprox = resultado.resultado.get("derivada_aprox")
+        m_exacta = resultado.resultado.get("derivada_exacta")
+
+        win = max(4 * abs(h), 1.0)
+        xs = np.linspace(x0 - win, x0 + win, 700)
+        with np.errstate(all="ignore"):
+            ys = np.asarray(f(xs), dtype=float)
+        mask = np.isfinite(ys)
+        fx0 = float(f(x0))
+
+        figura = Figure(figsize=(7.4, 3.8), dpi=100)
+        figura.patch.set_facecolor("#151a22")
+        eje = figura.add_subplot(111)
+        eje.set_facecolor("#101216")
+
+        eje.plot(xs[mask], ys[mask], linewidth=2, color="#7cc7ff", label="f(x)", zorder=2)
+        if m_aprox is not None:
+            eje.plot(xs, fx0 + m_aprox * (xs - x0), linewidth=2,
+                     color="#f28c28", label="Tangente aprox.", zorder=3)
+        if m_exacta is not None:
+            eje.plot(xs, fx0 + m_exacta * (xs - x0), linewidth=2, linestyle="--",
+                     color="#ff4fd8", label="Tangente exacta", zorder=4)
+        for nx in (x0 - h, x0 + h):
+            with np.errstate(all="ignore"):
+                ny = float(f(nx))
+            if np.isfinite(ny):
+                eje.scatter([nx], [ny], color="#facc15", s=55, zorder=6)
+        eje.scatter([x0], [fx0], color="#22d3ee", s=90, label="(x, f(x))", zorder=7)
+
+        eje.axhline(0, color="#ffffff", linewidth=1, alpha=0.35)
+        eje.grid(True, alpha=0.25)
+        eje.tick_params(colors="#dbeafe")
+        eje.ticklabel_format(useOffset=False)
+        for lado in ("bottom", "top", "left", "right"):
+            eje.spines[lado].set_color("#64748b")
+        eje.set_title("f(x) y recta tangente en x", color="#ffffff", fontsize=13, fontweight="bold")
+        eje.set_xlabel("x", color="#dbeafe")
+        eje.set_ylabel("f(x)", color="#dbeafe")
+        leyenda = eje.legend()
+        if leyenda:
+            leyenda.get_frame().set_facecolor("#151a22")
+            leyenda.get_frame().set_edgecolor("#344054")
+            for t in leyenda.get_texts():
+                t.set_color("#ffffff")
+        figura.tight_layout()
+
+        canvas = FigureCanvasTkAgg(figura, master=self.dp_grafica_frame)
+        canvas.draw()
+        canvas.get_tk_widget().grid(row=0, column=0, padx=12, pady=12, sticky="nsew")
+
+    def mostrar_resultado_dos_puntos(self, resultado):
+        self.limpiar_resultado_dos_puntos()
+        self.dp_resultado_frame.grid_columnconfigure(0, weight=1)
+
+        tarjeta = ctk.CTkFrame(
+            self.dp_resultado_frame, fg_color="#172238", corner_radius=10,
+            border_width=1, border_color="#24344f",
+        )
+        tarjeta.grid(row=0, column=0, padx=14, pady=(14, 12), sticky="ew")
+        tarjeta.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            tarjeta, text="Resultado", font=("Arial", 13, "bold"), text_color="#7cc7ff",
+        ).grid(row=0, column=0, padx=16, pady=(12, 4), sticky="w")
+
+        ctk.CTkLabel(
+            tarjeta, text=resultado.mensaje, font=("Arial", 16, "bold"),
+            text_color="#9fffe4", wraplength=760, justify="left",
+        ).grid(row=1, column=0, padx=16, pady=(0, 12), sticky="w")
+
+        procedimiento = ctk.CTkTextbox(
+            self.dp_resultado_frame, height=320, wrap="word", corner_radius=12,
+            fg_color="#101216", border_width=1, border_color="#303846",
+            text_color="#e8edf7", font=("Consolas", 13),
+        )
+        procedimiento.grid(row=1, column=0, padx=14, pady=(0, 18), sticky="ew")
+
+        texto = "PROCEDIMIENTO:\n----------------------------------------\n"
+        for i, paso in enumerate(resultado.pasos, start=1):
+            texto += f"{i}. {paso}\n"
+        if resultado.tabla:
+            texto += "\nTABLA:\n----------------------------------------\n"
+            for fila in resultado.tabla:
+                texto += f"{fila}\n"
+        procedimiento.insert("1.0", texto)
+        procedimiento.configure(state="disabled")
+
+    def mostrar_error_dos_puntos(self, mensaje):
+        self.limpiar_resultado_dos_puntos()
+        ctk.CTkLabel(
+            self.dp_resultado_frame, text="No se pudo calcular",
+            font=("Arial", 18, "bold"), text_color="#ffffff",
+        ).grid(row=0, column=0, padx=18, pady=(18, 6), sticky="w")
+        ctk.CTkLabel(
+            self.dp_resultado_frame, text=mensaje, font=("Arial", 14),
+            text_color="#fca5a5", wraplength=620, justify="left",
+        ).grid(row=1, column=0, padx=18, pady=(0, 18), sticky="w")
+
+
+# =========================================================
+    # HELPERS COMPARTIDOS PARA PANTALLAS CON GRÁFICA
+    # =========================================================
+
+    def _func_numpy(self, texto):
+        x = sp.symbols("x")
+        expr = sp.sympify(str(texto).replace("^", "**"))
+        return sp.lambdify(x, expr, "numpy")
+
+    def _parse_lista_simple(self, texto):
+        limpio = str(texto).replace(";", ",").replace(" ", ",")
+        return [float(p) for p in limpio.split(",") if p != ""]
+
+    def construir_calculadora_simbolos(self, padre, fila, entry):
+        calc = ctk.CTkFrame(
+            padre, fg_color="#151a22", corner_radius=14, border_width=1, border_color="#2a3342",
+        )
+        calc.grid(row=fila, column=0, padx=22, pady=(8, 10), sticky="ew")
+        for c in range(4):
+            calc.grid_columnconfigure(c, weight=1)
+        botones = [
+            ("x", "x"), ("sin", "sin("), ("cos", "cos("), ("C", "clear"),
+            ("+", "+"), ("-", "-"), ("×", "*"), ("÷", "/"),
+            ("x²", "**2"), ("xʸ", "**"), ("eˣ", "exp("), ("ln", "log("),
+            ("(", "("), (")", ")"), ("π", "pi"), ("⌫", "back"),
+        ]
+        for i, (txt, val) in enumerate(botones):
+            fb, cb = i // 4, i % 4
+            if val == "clear":
+                cmd, color, hover = lambda e=entry: self._limpiar_simbolo(e), "#dc2626", "#b91c1c"
+            elif val == "back":
+                cmd, color, hover = lambda e=entry: self._borrar_simbolo(e), "#0ea5e9", "#0284c7"
+            else:
+                cmd, color, hover = lambda v=val, e=entry: self._ins_simbolo(e, v), "#1a1f2b", "#243044"
+            ctk.CTkButton(
+                calc, text=txt, command=cmd, height=42, corner_radius=9,
+                fg_color=color, hover_color=hover, border_width=1, border_color="#343c4c",
+                text_color="#ffffff", font=("Arial", 14, "bold"),
+            ).grid(row=fb, column=cb, padx=6, pady=6, sticky="ew")
+
+    def _ins_simbolo(self, entry, texto):
+        entry.insert("end", texto)
+        entry.focus()
+
+    def _limpiar_simbolo(self, entry):
+        entry.delete(0, "end")
+        entry.focus()
+
+    def _borrar_simbolo(self, entry):
+        t = entry.get()
+        entry.delete(0, "end")
+        entry.insert(0, t[:-1])
+        entry.focus()
+
+    def _layout_doble(self, prefijo):
+        """Arma la pantalla de dos paneles (entrada | gráfica+resultado).
+           Guarda <prefijo>_grafica_frame y <prefijo>_resultado_frame.
+           Devuelve el panel de entrada para llenarlo con inputs."""
+        self.limpiar_pantalla()
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)
+
+        encabezado = ctk.CTkFrame(self, fg_color="#102d52", corner_radius=0, border_width=0)
+        encabezado.grid(row=0, column=0, sticky="ew")
+        encabezado.grid_columnconfigure(1, weight=1)
+        ctk.CTkButton(
+            encabezado, text="← Inicio", command=self.mostrar_inicio,
+            width=110, height=34, fg_color="#1a1f2b", hover_color="#243044",
+            border_width=1, border_color="#496386",
+        ).grid(row=0, column=0, padx=22, pady=18, sticky="w")
+        self.crear_label(
+            encabezado, self.metodo_actual.nombre, tamano=26, peso="bold", color="#ffffff",
+        ).grid(row=0, column=1, padx=10, pady=18, sticky="w")
+
+        cuerpo = ctk.CTkFrame(self, fg_color="transparent")
+        cuerpo.grid(row=1, column=0, padx=28, pady=24, sticky="nsew")
+        cuerpo.grid_columnconfigure(0, weight=1)
+        cuerpo.grid_columnconfigure(1, weight=1)
+        cuerpo.grid_rowconfigure(0, weight=1)
+
+        panel_entrada = ctk.CTkScrollableFrame(
+            cuerpo, fg_color="#101216", corner_radius=16, border_width=1, border_color="#303846",
+        )
+        panel_entrada.grid(row=0, column=0, padx=(0, 10), pady=0, sticky="nsew")
+        panel_entrada.grid_columnconfigure(0, weight=1)
+
+        panel_resultado = ctk.CTkFrame(
+            cuerpo, fg_color="#101216", corner_radius=16, border_width=1, border_color="#303846",
+        )
+        panel_resultado.grid(row=0, column=1, padx=(10, 0), pady=0, sticky="nsew")
+        panel_resultado.grid_columnconfigure(0, weight=1)
+        panel_resultado.grid_rowconfigure(3, weight=1)
+
+        self.crear_label(
+            panel_resultado, "GRÁFICA", tamano=11, peso="bold", color="#75b8ff",
+        ).grid(row=0, column=0, padx=22, pady=(22, 0), sticky="w")
+        grafica_frame = ctk.CTkFrame(
+            panel_resultado, fg_color="#151a22", corner_radius=12, border_width=1, border_color="#2a3342",
+        )
+        grafica_frame.grid(row=1, column=0, padx=22, pady=(10, 14), sticky="ew")
+        grafica_frame.grid_columnconfigure(0, weight=1)
+        self.crear_label(
+            grafica_frame, "Aquí aparecerá la gráfica al calcular.", tamano=14, color="#cbd5e1",
+        ).grid(row=0, column=0, padx=18, pady=18, sticky="w")
+
+        self.crear_label(
+            panel_resultado, "RESULTADO", tamano=11, peso="bold", color="#75b8ff",
+        ).grid(row=2, column=0, padx=22, pady=(8, 0), sticky="w")
+        resultado_frame = ctk.CTkScrollableFrame(
+            panel_resultado, fg_color="#151a22", corner_radius=12, border_width=1, border_color="#2a3342",
+        )
+        resultado_frame.grid(row=3, column=0, padx=22, pady=(10, 22), sticky="nsew")
+        resultado_frame.grid_columnconfigure(0, weight=1)
+        self.crear_label(
+            resultado_frame, "Aquí aparecerá el resultado y el procedimiento.", tamano=14, color="#cbd5e1",
+        ).grid(row=0, column=0, padx=18, pady=18, sticky="w")
+
+        setattr(self, prefijo + "_grafica_frame", grafica_frame)
+        setattr(self, prefijo + "_resultado_frame", resultado_frame)
+        return panel_entrada
+
+    def _fig_oscura(self):
+        figura = Figure(figsize=(7.4, 3.8), dpi=100)
+        figura.patch.set_facecolor("#151a22")
+        eje = figura.add_subplot(111)
+        eje.set_facecolor("#101216")
+        return figura, eje
+
+    def _estilo_eje(self, figura, eje, titulo, xlabel="x", ylabel="y"):
+        eje.axhline(0, color="#ffffff", linewidth=1, alpha=0.35)
+        eje.grid(True, alpha=0.25)
+        eje.tick_params(colors="#dbeafe")
+        try:
+            eje.ticklabel_format(useOffset=False)
+        except Exception:
+            pass
+        for lado in ("bottom", "top", "left", "right"):
+            eje.spines[lado].set_color("#64748b")
+        eje.set_title(titulo, color="#ffffff", fontsize=13, fontweight="bold")
+        eje.set_xlabel(xlabel, color="#dbeafe")
+        eje.set_ylabel(ylabel, color="#dbeafe")
+        leyenda = eje.legend()
+        if leyenda:
+            leyenda.get_frame().set_facecolor("#151a22")
+            leyenda.get_frame().set_edgecolor("#344054")
+            for t in leyenda.get_texts():
+                t.set_color("#ffffff")
+        figura.tight_layout()
+
+    def _montar_canvas(self, prefijo, figura):
+        frame = getattr(self, prefijo + "_grafica_frame")
+        for w in frame.winfo_children():
+            w.destroy()
+        canvas = FigureCanvasTkAgg(figura, master=frame)
+        canvas.draw()
+        canvas.get_tk_widget().grid(row=0, column=0, padx=12, pady=12, sticky="nsew")
+
+    def _render_resultado(self, prefijo, resultado):
+        frame = getattr(self, prefijo + "_resultado_frame")
+        for w in frame.winfo_children():
+            w.destroy()
+        frame.grid_columnconfigure(0, weight=1)
+
+        tarjeta = ctk.CTkFrame(
+            frame, fg_color="#172238", corner_radius=10, border_width=1, border_color="#24344f",
+        )
+        tarjeta.grid(row=0, column=0, padx=14, pady=(14, 12), sticky="ew")
+        tarjeta.grid_columnconfigure(0, weight=1)
+        ctk.CTkLabel(
+            tarjeta, text="Resultado", font=("Arial", 13, "bold"), text_color="#7cc7ff",
+        ).grid(row=0, column=0, padx=16, pady=(12, 4), sticky="w")
+        ctk.CTkLabel(
+            tarjeta, text=resultado.mensaje, font=("Arial", 16, "bold"),
+            text_color="#9fffe4", wraplength=760, justify="left",
+        ).grid(row=1, column=0, padx=16, pady=(0, 12), sticky="w")
+
+        procedimiento = ctk.CTkTextbox(
+            frame, height=320, wrap="word", corner_radius=12,
+            fg_color="#101216", border_width=1, border_color="#303846",
+            text_color="#e8edf7", font=("Consolas", 13),
+        )
+        procedimiento.grid(row=1, column=0, padx=14, pady=(0, 18), sticky="ew")
+        texto = "PROCEDIMIENTO:\n----------------------------------------\n"
+        for i, paso in enumerate(resultado.pasos, start=1):
+            texto += f"{i}. {paso}\n"
+        if resultado.tabla:
+            texto += "\nTABLA:\n----------------------------------------\n"
+            for fila in resultado.tabla:
+                texto += f"{fila}\n"
+        procedimiento.insert("1.0", texto)
+        procedimiento.configure(state="disabled")
+
+    def _render_error(self, prefijo, mensaje):
+        frame = getattr(self, prefijo + "_resultado_frame")
+        for w in frame.winfo_children():
+            w.destroy()
+        ctk.CTkLabel(
+            frame, text="No se pudo calcular", font=("Arial", 18, "bold"), text_color="#ffffff",
+        ).grid(row=0, column=0, padx=18, pady=(18, 6), sticky="w")
+        ctk.CTkLabel(
+            frame, text=mensaje, font=("Arial", 14), text_color="#fca5a5",
+            wraplength=620, justify="left",
+        ).grid(row=1, column=0, padx=18, pady=(0, 18), sticky="w")
+
+    # ---- dibujantes reutilizables ----
+    def _dibujar_tangente(self, prefijo, datos, resultado):
+        f = self._func_numpy(datos["funcion"])
+        x0 = float(datos["x"])
+        h = float(datos["h"])
+        m_aprox = resultado.resultado.get("derivada_aprox")
+        m_exacta = resultado.resultado.get("derivada_exacta")
+        win = max(4 * abs(h), 1.0)
+        xs = np.linspace(x0 - win, x0 + win, 700)
+        with np.errstate(all="ignore"):
+            ys = np.asarray(f(xs), dtype=float)
+        mask = np.isfinite(ys)
+        fx0 = float(f(x0))
+
+        figura, eje = self._fig_oscura()
+        eje.plot(xs[mask], ys[mask], linewidth=2, color="#7cc7ff", label="f(x)", zorder=2)
+        if m_aprox is not None:
+            eje.plot(xs, fx0 + m_aprox * (xs - x0), linewidth=2,
+                     color="#f28c28", label="Tangente aprox.", zorder=3)
+        if m_exacta is not None:
+            eje.plot(xs, fx0 + m_exacta * (xs - x0), linewidth=2, linestyle="--",
+                     color="#ff4fd8", label="Tangente exacta", zorder=4)
+        for nx in (x0 - 2 * h, x0 - h, x0 + h, x0 + 2 * h):
+            with np.errstate(all="ignore"):
+                ny = float(f(nx))
+            if np.isfinite(ny):
+                eje.scatter([nx], [ny], color="#facc15", s=50, zorder=6)
+        eje.scatter([x0], [fx0], color="#22d3ee", s=90, label="(x, f(x))", zorder=7)
+        self._estilo_eje(figura, eje, "f(x) y recta tangente en x", "x", "f(x)")
+        self._montar_canvas(prefijo, figura)
+
+    def _dibujar_ajuste(self, prefijo, datos, resultado, tipo):
+        xs = np.array(self._parse_lista_simple(datos["xs"]), dtype=float)
+        ys = np.array(self._parse_lista_simple(datos["ys"]), dtype=float)
+        if tipo == "poly":
+            coef = resultado.resultado
+            modelo = lambda X: sum(c * np.asarray(X) ** k for k, c in enumerate(coef))
+        elif tipo == "exp":
+            a, b = resultado.resultado["a"], resultado.resultado["b"]
+            modelo = lambda X: a * np.exp(b * np.asarray(X))
+        else:  # log
+            a, b = resultado.resultado["a"], resultado.resultado["b"]
+            modelo = lambda X: a + b * np.log(np.asarray(X))
+
+        x_min, x_max = float(np.min(xs)), float(np.max(xs))
+        ancho = (x_max - x_min) or 1.0
+        xc = np.linspace(x_min - 0.15 * ancho, x_max + 0.15 * ancho, 600)
+        if tipo == "log":
+            xc = xc[xc > 0]
+        with np.errstate(all="ignore"):
+            yc = np.asarray(modelo(xc), dtype=float)
+        m = np.isfinite(yc)
+
+        figura, eje = self._fig_oscura()
+        eje.plot(xc[m], yc[m], linewidth=2, color="#7cc7ff", label="Curva ajustada", zorder=2)
+        eje.scatter(xs, ys, color="#f28c28", s=80, label="(xᵢ, yᵢ)", zorder=5)
+        self._estilo_eje(figura, eje, "Datos y curva de ajuste", "x", "y")
+        self._montar_canvas(prefijo, figura)
+
+    def _dibujar_taylor(self, prefijo, datos, resultado):
+        f_np = self._func_numpy(datos["funcion"])
+        P_np = self._func_numpy(resultado.resultado["polinomio"])
+        x0 = float(datos.get("x0") or 0.0)
+        x_eval = datos.get("x")
+        radio = 3.0
+        if x_eval not in (None, ""):
+            radio = max(2.0, abs(float(x_eval) - x0) * 1.5)
+        xc = np.linspace(x0 - radio, x0 + radio, 700)
+        with np.errstate(all="ignore"):
+            yf = np.asarray(f_np(xc), dtype=float)
+            yp = np.asarray(P_np(xc), dtype=float)
+
+        figura, eje = self._fig_oscura()
+        mp = np.isfinite(yp)
+        eje.plot(xc[mp], yp[mp], linewidth=2, color="#7cc7ff", label="P(x) Taylor", zorder=2)
+        mf = np.isfinite(yf)
+        eje.plot(xc[mf], yf[mf], linewidth=3, linestyle="--", color="#ff4fd8", label="f(x) original", zorder=4)
+        eje.scatter([x0], [float(f_np(x0))], color="#f28c28", s=80, label="x₀", zorder=6)
+        self._estilo_eje(figura, eje, "f(x) vs polinomio", "x", "f(x) / P(x)")
+        self._montar_canvas(prefijo, figura)
+
+
+
+# ---------- DERIVACIÓN POR 3 PUNTOS ----------
+    def mostrar_tres_puntos(self):
+        pe = self._layout_doble("tp")
+        self.crear_label(pe, "DATOS DE ENTRADA", tamano=11, peso="bold", color="#75b8ff"
+                         ).grid(row=0, column=0, padx=22, pady=(22, 0), sticky="w")
+        self.crear_label(pe, self.metodo_actual.descripcion, tamano=14, color="#cbd5e1"
+                         ).grid(row=1, column=0, padx=22, pady=(4, 12), sticky="w")
+        self.tp_funcion = self.crear_input_deriv(pe, 2, "Función f(x)", "Ejemplo: sin(x)")
+        self.construir_calculadora_simbolos(pe, 4, self.tp_funcion)
+        self.tp_x = self.crear_input_deriv(pe, 5, "Punto x donde derivar", "Ejemplo: 1")
+        self.tp_h = self.crear_input_deriv(pe, 7, "Paso h", "Ejemplo: 0.1")
+        self.crear_label(pe, "Fórmula", tamano=13, peso="bold", color="#f1f5ff"
+                         ).grid(row=9, column=0, padx=22, pady=(10, 4), sticky="w")
+        self.tp_formula = ctk.CTkOptionMenu(
+            pe, values=["central", "adelante", "atras"],
+            fg_color="#0f141b", button_color="#1f6feb", button_hover_color="#1959bd",
+            text_color="#ffffff", font=("Arial", 14))
+        self.tp_formula.set("central")
+        self.tp_formula.grid(row=10, column=0, padx=22, pady=(0, 12), sticky="ew")
+        ctk.CTkButton(pe, text="Calcular f'(x)", command=self.calcular_tres_puntos,
+                      height=44, corner_radius=10, font=("Arial", 15, "bold"),
+                      fg_color="#159a73", hover_color="#0f7a5d"
+                      ).grid(row=11, column=0, padx=22, pady=(4, 24), sticky="ew")
+
+    def calcular_tres_puntos(self):
+        try:
+            datos = {"funcion": self.tp_funcion.get(), "x": self.tp_x.get(),
+                     "h": self.tp_h.get(), "formula": self.tp_formula.get()}
+            r = self.metodo_actual.ejecutar(**datos)
+            if r.resultado is None:
+                self._render_error("tp", r.mensaje); return
+            self._dibujar_tangente("tp", datos, r)
+            self._render_resultado("tp", r)
+        except Exception as e:
+            self._render_error("tp", str(e))
+
+    # ---------- DERIVACIÓN POR 5 PUNTOS ----------
+    def mostrar_cinco_puntos(self):
+        pe = self._layout_doble("cp")
+        self.crear_label(pe, "DATOS DE ENTRADA", tamano=11, peso="bold", color="#75b8ff"
+                         ).grid(row=0, column=0, padx=22, pady=(22, 0), sticky="w")
+        self.crear_label(pe, self.metodo_actual.descripcion, tamano=14, color="#cbd5e1"
+                         ).grid(row=1, column=0, padx=22, pady=(4, 12), sticky="w")
+        self.cp_funcion = self.crear_input_deriv(pe, 2, "Función f(x)", "Ejemplo: sin(x)")
+        self.construir_calculadora_simbolos(pe, 4, self.cp_funcion)
+        self.cp_x = self.crear_input_deriv(pe, 5, "Punto x donde derivar", "Ejemplo: 1")
+        self.cp_h = self.crear_input_deriv(pe, 7, "Paso h", "Ejemplo: 0.1")
+        self.crear_label(pe, "Fórmula", tamano=13, peso="bold", color="#f1f5ff"
+                         ).grid(row=9, column=0, padx=22, pady=(10, 4), sticky="w")
+        self.cp_formula = ctk.CTkOptionMenu(
+            pe, values=["central", "adelante", "atras"],
+            fg_color="#0f141b", button_color="#1f6feb", button_hover_color="#1959bd",
+            text_color="#ffffff", font=("Arial", 14))
+        self.cp_formula.set("central")
+        self.cp_formula.grid(row=10, column=0, padx=22, pady=(0, 12), sticky="ew")
+        ctk.CTkButton(pe, text="Calcular f'(x)", command=self.calcular_cinco_puntos,
+                      height=44, corner_radius=10, font=("Arial", 15, "bold"),
+                      fg_color="#159a73", hover_color="#0f7a5d"
+                      ).grid(row=11, column=0, padx=22, pady=(4, 24), sticky="ew")
+
+    def calcular_cinco_puntos(self):
+        try:
+            datos = {"funcion": self.cp_funcion.get(), "x": self.cp_x.get(),
+                     "h": self.cp_h.get(), "formula": self.cp_formula.get()}
+            r = self.metodo_actual.ejecutar(**datos)
+            if r.resultado is None:
+                self._render_error("cp", r.mensaje); return
+            self._dibujar_tangente("cp", datos, r)
+            self._render_resultado("cp", r)
+        except Exception as e:
+            self._render_error("cp", str(e))
+
+    # ---------- EXTRAPOLACIÓN EN DERIVACIÓN ----------
+    def mostrar_extrapolacion_deriv(self):
+        pe = self._layout_doble("ex")
+        self.crear_label(pe, "DATOS DE ENTRADA", tamano=11, peso="bold", color="#75b8ff"
+                         ).grid(row=0, column=0, padx=22, pady=(22, 0), sticky="w")
+        self.crear_label(pe, self.metodo_actual.descripcion, tamano=14, color="#cbd5e1"
+                         ).grid(row=1, column=0, padx=22, pady=(4, 12), sticky="w")
+        self.ex_funcion = self.crear_input_deriv(pe, 2, "Función f(x)", "Ejemplo: sin(x)")
+        self.construir_calculadora_simbolos(pe, 4, self.ex_funcion)
+        self.ex_x = self.crear_input_deriv(pe, 5, "Punto x donde derivar", "Ejemplo: 1")
+        self.ex_h = self.crear_input_deriv(pe, 7, "Paso inicial h", "Ejemplo: 0.4")
+        self.ex_niveles = self.crear_input_deriv(pe, 9, "Niveles de extrapolación", "Ejemplo: 4")
+        ctk.CTkButton(pe, text="Calcular f'(x)", command=self.calcular_extrapolacion_deriv,
+                      height=44, corner_radius=10, font=("Arial", 15, "bold"),
+                      fg_color="#159a73", hover_color="#0f7a5d"
+                      ).grid(row=11, column=0, padx=22, pady=(4, 24), sticky="ew")
+
+    def calcular_extrapolacion_deriv(self):
+        try:
+            datos = {"funcion": self.ex_funcion.get(), "x": self.ex_x.get(),
+                     "h": self.ex_h.get(), "niveles": self.ex_niveles.get()}
+            r = self.metodo_actual.ejecutar(**datos)
+            if r.resultado is None:
+                self._render_error("ex", r.mensaje); return
+            self._dibujar_tangente("ex", datos, r)
+            self._render_resultado("ex", r)
+        except Exception as e:
+            self._render_error("ex", str(e))
+
+
+
+# ---------- MÍNIMOS CUADRADOS ----------
+    def mostrar_minimos(self):
+        pe = self._layout_doble("mc")
+        self.crear_label(pe, "DATOS DE ENTRADA", tamano=11, peso="bold", color="#75b8ff"
+                         ).grid(row=0, column=0, padx=22, pady=(22, 0), sticky="w")
+        self.crear_label(pe, self.metodo_actual.descripcion, tamano=14, color="#cbd5e1"
+                         ).grid(row=1, column=0, padx=22, pady=(4, 12), sticky="w")
+        self.mc_xs = self.crear_input_deriv(pe, 2, "Valores de x (separados por coma)", "0, 1, 2, 3, 4")
+        self.mc_ys = self.crear_input_deriv(pe, 4, "Valores de y (separados por coma)", "1.1, 2.9, 5.2, 6.8, 9.1")
+        self.mc_grado = self.crear_input_deriv(pe, 6, "Grado del polinomio (1 = recta)", "1")
+        ctk.CTkButton(pe, text="Ajustar y graficar", command=self.calcular_minimos,
+                      height=44, corner_radius=10, font=("Arial", 15, "bold"),
+                      fg_color="#159a73", hover_color="#0f7a5d"
+                      ).grid(row=8, column=0, padx=22, pady=(4, 24), sticky="ew")
+
+    def calcular_minimos(self):
+        try:
+            datos = {"xs": self.mc_xs.get(), "ys": self.mc_ys.get(), "grado": self.mc_grado.get()}
+            r = self.metodo_actual.ejecutar(**datos)
+            if r.resultado is None:
+                self._render_error("mc", r.mensaje); return
+            self._dibujar_ajuste("mc", datos, r, "poly")
+            self._render_resultado("mc", r)
+        except Exception as e:
+            self._render_error("mc", str(e))
+
+    # ---------- AJUSTE EXPONENCIAL ----------
+    def mostrar_ajuste_exp(self):
+        pe = self._layout_doble("ae")
+        self.crear_label(pe, "DATOS DE ENTRADA", tamano=11, peso="bold", color="#75b8ff"
+                         ).grid(row=0, column=0, padx=22, pady=(22, 0), sticky="w")
+        self.crear_label(pe, self.metodo_actual.descripcion, tamano=14, color="#cbd5e1"
+                         ).grid(row=1, column=0, padx=22, pady=(4, 12), sticky="w")
+        self.ae_xs = self.crear_input_deriv(pe, 2, "Valores de x (separados por coma)", "0, 1, 2, 3, 4")
+        self.ae_ys = self.crear_input_deriv(pe, 4, "Valores de y (y > 0)", "1.0, 2.1, 4.0, 8.2, 15.9")
+        ctk.CTkButton(pe, text="Ajustar y graficar", command=self.calcular_ajuste_exp,
+                      height=44, corner_radius=10, font=("Arial", 15, "bold"),
+                      fg_color="#159a73", hover_color="#0f7a5d"
+                      ).grid(row=6, column=0, padx=22, pady=(4, 24), sticky="ew")
+
+    def calcular_ajuste_exp(self):
+        try:
+            datos = {"xs": self.ae_xs.get(), "ys": self.ae_ys.get()}
+            r = self.metodo_actual.ejecutar(**datos)
+            if r.resultado is None:
+                self._render_error("ae", r.mensaje); return
+            self._dibujar_ajuste("ae", datos, r, "exp")
+            self._render_resultado("ae", r)
+        except Exception as e:
+            self._render_error("ae", str(e))
+
+    # ---------- AJUSTE LOGARÍTMICO ----------
+    def mostrar_ajuste_log(self):
+        pe = self._layout_doble("al")
+        self.crear_label(pe, "DATOS DE ENTRADA", tamano=11, peso="bold", color="#75b8ff"
+                         ).grid(row=0, column=0, padx=22, pady=(22, 0), sticky="w")
+        self.crear_label(pe, self.metodo_actual.descripcion, tamano=14, color="#cbd5e1"
+                         ).grid(row=1, column=0, padx=22, pady=(4, 12), sticky="w")
+        self.al_xs = self.crear_input_deriv(pe, 2, "Valores de x (x > 0)", "1, 2, 3, 4, 5")
+        self.al_ys = self.crear_input_deriv(pe, 4, "Valores de y (separados por coma)", "0.5, 2.1, 2.9, 3.5, 4.0")
+        ctk.CTkButton(pe, text="Ajustar y graficar", command=self.calcular_ajuste_log,
+                      height=44, corner_radius=10, font=("Arial", 15, "bold"),
+                      fg_color="#159a73", hover_color="#0f7a5d"
+                      ).grid(row=6, column=0, padx=22, pady=(4, 24), sticky="ew")
+
+    def calcular_ajuste_log(self):
+        try:
+            datos = {"xs": self.al_xs.get(), "ys": self.al_ys.get()}
+            r = self.metodo_actual.ejecutar(**datos)
+            if r.resultado is None:
+                self._render_error("al", r.mensaje); return
+            self._dibujar_ajuste("al", datos, r, "log")
+            self._render_resultado("al", r)
+        except Exception as e:
+            self._render_error("al", str(e))
+
+    # ---------- POLINOMIO DE TAYLOR ----------
+    def mostrar_taylor(self):
+        pe = self._layout_doble("ty")
+        self.crear_label(pe, "DATOS DE ENTRADA", tamano=11, peso="bold", color="#75b8ff"
+                         ).grid(row=0, column=0, padx=22, pady=(22, 0), sticky="w")
+        self.crear_label(pe, self.metodo_actual.descripcion, tamano=14, color="#cbd5e1"
+                         ).grid(row=1, column=0, padx=22, pady=(4, 12), sticky="w")
+        self.ty_funcion = self.crear_input_deriv(pe, 2, "Función f(x)", "Ejemplo: cos(x)")
+        self.construir_calculadora_simbolos(pe, 4, self.ty_funcion)
+        self.ty_x0 = self.crear_input_deriv(pe, 5, "Punto de desarrollo x0", "0")
+        self.ty_grado = self.crear_input_deriv(pe, 7, "Grado n del polinomio", "4")
+        self.ty_x = self.crear_input_deriv(pe, 9, "Punto a evaluar (opcional)", "0.5")
+        ctk.CTkButton(pe, text="Calcular y graficar", command=self.calcular_taylor,
+                      height=44, corner_radius=10, font=("Arial", 15, "bold"),
+                      fg_color="#159a73", hover_color="#0f7a5d"
+                      ).grid(row=11, column=0, padx=22, pady=(4, 24), sticky="ew")
+
+    def calcular_taylor(self):
+        try:
+            datos = {"funcion": self.ty_funcion.get(), "x0": self.ty_x0.get(),
+                     "grado": self.ty_grado.get(), "x": self.ty_x.get()}
+            r = self.metodo_actual.ejecutar(**datos)
+            if r.resultado is None:
+                self._render_error("ty", r.mensaje); return
+            self._dibujar_taylor("ty", datos, r)
+            self._render_resultado("ty", r)
+        except Exception as e:
+            self._render_error("ty", str(e))
+
+    # ---------- DESARROLLO EN POLINOMIOS ----------
+    def mostrar_desarrollo(self):
+        pe = self._layout_doble("ds")
+        self.crear_label(pe, "DATOS DE ENTRADA", tamano=11, peso="bold", color="#75b8ff"
+                         ).grid(row=0, column=0, padx=22, pady=(22, 0), sticky="w")
+        self.crear_label(pe, self.metodo_actual.descripcion, tamano=14, color="#cbd5e1"
+                         ).grid(row=1, column=0, padx=22, pady=(4, 12), sticky="w")
+        self.ds_funcion = self.crear_input_deriv(pe, 2, "Función f(x)", "Ejemplo: exp(x)")
+        self.construir_calculadora_simbolos(pe, 4, self.ds_funcion)
+        self.ds_x0 = self.crear_input_deriv(pe, 5, "Punto de desarrollo x0", "0")
+        self.ds_grado = self.crear_input_deriv(pe, 7, "Grado del polinomio", "4")
+        self.ds_x = self.crear_input_deriv(pe, 9, "Punto a evaluar (opcional)", "1")
+        ctk.CTkButton(pe, text="Calcular y graficar", command=self.calcular_desarrollo,
+                      height=44, corner_radius=10, font=("Arial", 15, "bold"),
+                      fg_color="#159a73", hover_color="#0f7a5d"
+                      ).grid(row=11, column=0, padx=22, pady=(4, 24), sticky="ew")
+
+    def calcular_desarrollo(self):
+        try:
+            datos = {"funcion": self.ds_funcion.get(), "x0": self.ds_x0.get(),
+                     "grado": self.ds_grado.get(), "x": self.ds_x.get()}
+            r = self.metodo_actual.ejecutar(**datos)
+            if r.resultado is None:
+                self._render_error("ds", r.mensaje); return
+            self._dibujar_taylor("ds", datos, r)
+            self._render_resultado("ds", r)
+        except Exception as e:
+            self._render_error("ds", str(e))
+
+# ---------- EXTRAPOLACIÓN (INTERPOLACIÓN) ----------
+    def mostrar_extrapolacion_interp(self):
+        pe = self._layout_doble("ei")
+        self.crear_label(pe, "DATOS DE ENTRADA", tamano=11, peso="bold", color="#75b8ff"
+                         ).grid(row=0, column=0, padx=22, pady=(22, 0), sticky="w")
+        self.crear_label(pe, self.metodo_actual.descripcion, tamano=14, color="#cbd5e1"
+                         ).grid(row=1, column=0, padx=22, pady=(4, 12), sticky="w")
+        self.ei_xs = self.crear_input_deriv(pe, 2, "Valores de x (separados por coma)", "1, 2, 3, 4")
+        self.ei_ys = self.crear_input_deriv(pe, 4, "Valores de y (separados por coma)", "2, 4, 6, 8")
+        self.ei_x = self.crear_input_deriv(pe, 6, "Punto a extrapolar", "5")
+        ctk.CTkButton(pe, text="Extrapolar y graficar", command=self.calcular_extrapolacion_interp,
+                      height=44, corner_radius=10, font=("Arial", 15, "bold"),
+                      fg_color="#159a73", hover_color="#0f7a5d"
+                      ).grid(row=8, column=0, padx=22, pady=(4, 24), sticky="ew")
+
+    def calcular_extrapolacion_interp(self):
+        try:
+            datos = {"xs": self.ei_xs.get(), "ys": self.ei_ys.get(), "x": self.ei_x.get()}
+            r = self.metodo_actual.ejecutar(**datos)
+            if r.resultado is None:
+                self._render_error("ei", r.mensaje); return
+            self._dibujar_extrapolacion_interp("ei", datos, r)
+            self._render_resultado("ei", r)
+        except Exception as e:
+            self._render_error("ei", str(e))
+
+    def _newton_eval(self, xs, ys, X):
+        """Evalúa el polinomio de Newton (diferencias divididas) en X (array)."""
+        n = len(xs)
+        dd = [[0.0] * n for _ in range(n)]
+        for i in range(n):
+            dd[i][0] = ys[i]
+        for j in range(1, n):
+            for i in range(n - j):
+                dd[i][j] = (dd[i + 1][j - 1] - dd[i][j - 1]) / (xs[i + j] - xs[i])
+        coef = [dd[0][j] for j in range(n)]
+        X = np.asarray(X, dtype=float)
+        val = np.full_like(X, coef[0], dtype=float)
+        prod = np.ones_like(X, dtype=float)
+        for j in range(1, n):
+            prod = prod * (X - xs[j - 1])
+            val = val + coef[j] * prod
+        return val
+
+    def _dibujar_extrapolacion_interp(self, prefijo, datos, resultado):
+        xs = self._parse_lista_simple(datos["xs"])
+        ys = self._parse_lista_simple(datos["ys"])
+        x_ext = float(datos["x"])
+        y_ext = float(resultado.resultado)
+
+        # rango que incluye los datos y el punto extrapolado
+        x_lo = min(min(xs), x_ext)
+        x_hi = max(max(xs), x_ext)
+        ancho = (x_hi - x_lo) or 1.0
+        xc = np.linspace(x_lo - 0.1 * ancho, x_hi + 0.1 * ancho, 700)
+        with np.errstate(all="ignore"):
+            yc = np.asarray(self._newton_eval(xs, ys, xc), dtype=float)
+        m = np.isfinite(yc)
+
+        figura, eje = self._fig_oscura()
+        eje.plot(xc[m], yc[m], linewidth=2, color="#7cc7ff", label="P(x) Newton", zorder=2)
+        eje.scatter(xs, ys, color="#f28c28", s=80, label="datos (xᵢ, yᵢ)", zorder=5)
+
+        # líneas guía punteadas hasta el punto extrapolado
+        eje.plot([x_ext, x_ext], [min(min(ys), y_ext), y_ext],
+                 linestyle=":", color="#ff4fd8", linewidth=1.5, zorder=3)
+        eje.scatter([x_ext], [y_ext], color="#ff4fd8", s=120, marker="*",
+                    label=f"extrapolado ({x_ext}, {round(y_ext, 4)})", zorder=7)
+
+        # sombrea la zona de extrapolación (fuera de los datos)
+        if x_ext > max(xs):
+            eje.axvspan(max(xs), xc[m][-1] if m.any() else x_ext,
+                        color="#ff4fd8", alpha=0.06, zorder=1)
+        elif x_ext < min(xs):
+            eje.axvspan(xc[m][0] if m.any() else x_ext, min(xs),
+                        color="#ff4fd8", alpha=0.06, zorder=1)
+
+        self._estilo_eje(figura, eje, "Extrapolación con polinomio de Newton", "x", "y")
+        self._montar_canvas(prefijo, figura)
