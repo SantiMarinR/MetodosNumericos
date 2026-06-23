@@ -27,6 +27,11 @@ class RungeKuttaFehlberg(MetodoNumerico):
             return ResultadoMetodo(None, "h debe ser distinto de 0 y n debe ser mayor o igual a 1.", [], [])
 
         tabla = []
+        pasos = [
+            "Se parte de y' = f(x,y), el valor inicial y el paso h.",
+            "Fehlberg calcula k1 a k6 para obtener dos aproximaciones: una de orden 4 y otra de orden 5.",
+            "El error local se estima como |y orden 5 - y orden 4|.",
+        ]
         for i in range(1, n + 1):
             k1 = h * f(x, y)
             k2 = h * f(x + h / 4, y + k1 / 4)
@@ -42,17 +47,24 @@ class RungeKuttaFehlberg(MetodoNumerico):
                 "i": i, "x_i": redondear(x), "y_i": redondear(y),
                 "k1": redondear(k1), "k2": redondear(k2), "k3": redondear(k3),
                 "k4": redondear(k4), "k5": redondear(k5), "k6": redondear(k6),
+                "x_{i+1}": redondear(x + h),
                 "y orden 4": redondear(y4), "y orden 5": redondear(y5), "error": redondear(error),
             })
+            if i <= 20:
+                pasos.extend([
+                    f"Iteracion {i}: x_i={redondear(x)}, y_i={redondear(y)}.",
+                    f"k1={redondear(k1)}, k2={redondear(k2)}, k3={redondear(k3)}, k4={redondear(k4)}, k5={redondear(k5)}, k6={redondear(k6)}.",
+                    f"Orden 4: y4={redondear(y4)}; orden 5: y5={redondear(y5)}.",
+                    f"Error local = |{redondear(y5)} - {redondear(y4)}| = {redondear(error)}; se avanza con y_{i + 1}={redondear(y5)}.",
+                ])
             x, y = x + h, y5
+
+        if n > 20:
+            pasos.append("Se omiten del procedimiento escrito las iteraciones restantes para no saturar la pantalla; la tabla conserva todos los valores.")
 
         return ResultadoMetodo(
             resultado={"x": redondear(x), "y": redondear(y)},
             mensaje=f"Aproximacion final RKF45: y({redondear(x)}) = {redondear(y)}",
-            pasos=[
-                "Se calculan k1 a k6 con los coeficientes de Fehlberg.",
-                "Se obtiene y de orden 4 y y de orden 5.",
-                "El error local se estima como |y_5 - y_4|.",
-            ],
+            pasos=pasos,
             tabla=tabla,
         )

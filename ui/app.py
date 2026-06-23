@@ -7710,21 +7710,27 @@ class App(ctk.CTk):
             text_color="#9fffe4", wraplength=760, justify="left",
         ).grid(row=1, column=0, padx=16, pady=(0, 12), sticky="w")
 
-        procedimiento = ctk.CTkTextbox(
-            self.dp_resultado_frame, height=320, wrap="word", corner_radius=12,
-            fg_color="#101216", border_width=1, border_color="#303846",
-            text_color="#e8edf7", font=("Consolas", 13),
-        )
-        procedimiento.grid(row=1, column=0, padx=14, pady=(0, 18), sticky="ew")
-
-        texto = "PROCEDIMIENTO:\n----------------------------------------\n"
-        for i, paso in enumerate(resultado.pasos, start=1):
-            texto += f"{i}. {paso}\n"
-        procedimiento.insert("1.0", texto)
-        procedimiento.configure(state="disabled")
-
+        fila_actual = 1
         if resultado.tabla:
-            self._dibujar_tabla_generica(self.dp_resultado_frame, resultado.tabla, fila=2)
+            self._dibujar_tabla_generica(self.dp_resultado_frame, resultado.tabla, fila=fila_actual)
+            encabezados, _filas = self._normalizar_tabla_generica(resultado.tabla)
+            max_columnas = 8
+            bloques = 1 if len(encabezados) <= max_columnas else ((len(encabezados) - 2) // (max_columnas - 1)) + 1
+            fila_actual += bloques + 1
+
+        if resultado.pasos:
+            procedimiento = ctk.CTkTextbox(
+                self.dp_resultado_frame, height=260, wrap="word", corner_radius=12,
+                fg_color="#101216", border_width=1, border_color="#303846",
+                text_color="#e8edf7", font=("Consolas", 13),
+            )
+            procedimiento.grid(row=fila_actual, column=0, padx=14, pady=(0, 18), sticky="ew")
+
+            texto = "PROCEDIMIENTO DETALLADO:\n----------------------------------------\n"
+            for i, paso in enumerate(resultado.pasos, start=1):
+                texto += f"{i}. {paso}\n"
+            procedimiento.insert("1.0", texto)
+            procedimiento.configure(state="disabled")
 
     def mostrar_error_dos_puntos(self, mensaje):
         self.limpiar_resultado_dos_puntos()
@@ -7915,20 +7921,26 @@ class App(ctk.CTk):
             text_color="#9fffe4", wraplength=760, justify="left",
         ).grid(row=1, column=0, padx=16, pady=(0, 12), sticky="w")
 
-        procedimiento = ctk.CTkTextbox(
-            frame, height=320, wrap="word", corner_radius=12,
-            fg_color="#101216", border_width=1, border_color="#303846",
-            text_color="#e8edf7", font=("Consolas", 13),
-        )
-        procedimiento.grid(row=1, column=0, padx=14, pady=(0, 18), sticky="ew")
-        texto = "PROCEDIMIENTO:\n----------------------------------------\n"
-        for i, paso in enumerate(resultado.pasos, start=1):
-            texto += f"{i}. {paso}\n"
-        procedimiento.insert("1.0", texto)
-        procedimiento.configure(state="disabled")
-
+        fila_actual = 1
         if resultado.tabla:
-            self._dibujar_tabla_generica(frame, resultado.tabla, fila=2)
+            self._dibujar_tabla_generica(frame, resultado.tabla, fila=fila_actual)
+            encabezados, _filas = self._normalizar_tabla_generica(resultado.tabla)
+            max_columnas = 8
+            bloques = 1 if len(encabezados) <= max_columnas else ((len(encabezados) - 2) // (max_columnas - 1)) + 1
+            fila_actual += bloques + 1
+
+        if resultado.pasos:
+            procedimiento = ctk.CTkTextbox(
+                frame, height=260, wrap="word", corner_radius=12,
+                fg_color="#101216", border_width=1, border_color="#303846",
+                text_color="#e8edf7", font=("Consolas", 13),
+            )
+            procedimiento.grid(row=fila_actual, column=0, padx=14, pady=(0, 18), sticky="ew")
+            texto = "PROCEDIMIENTO DETALLADO:\n----------------------------------------\n"
+            for i, paso in enumerate(resultado.pasos, start=1):
+                texto += f"{i}. {paso}\n"
+            procedimiento.insert("1.0", texto)
+            procedimiento.configure(state="disabled")
 
     def _normalizar_tabla_generica(self, tabla):
         if not tabla:
@@ -7948,6 +7960,34 @@ class App(ctk.CTk):
         if not encabezados:
             return
 
+        ctk.CTkLabel(
+            padre,
+            text="TABLA DE ITERACIONES",
+            font=("Arial", 11, "bold"),
+            text_color="#75b8ff",
+        ).grid(row=fila, column=0, padx=16, pady=(4, 6), sticky="w")
+
+        max_columnas = 8
+        if len(encabezados) <= max_columnas:
+            grupos = [encabezados]
+        else:
+            fija = [encabezados[0]]
+            restantes = encabezados[1:]
+            grupos = []
+            for inicio in range(0, len(restantes), max_columnas - 1):
+                grupos.append(fija + restantes[inicio:inicio + max_columnas - 1])
+
+        for indice_grupo, grupo in enumerate(grupos):
+            self._dibujar_bloque_tabla(
+                padre,
+                encabezados,
+                filas,
+                grupo,
+                fila=fila + 1 + indice_grupo,
+                titulo=f"Columnas {indice_grupo + 1}" if len(grupos) > 1 else "",
+            )
+
+    def _dibujar_bloque_tabla(self, padre, encabezados, filas, grupo, fila=0, titulo=""):
         contenedor = ctk.CTkFrame(
             padre,
             fg_color="#101216",
@@ -7957,10 +7997,21 @@ class App(ctk.CTk):
         )
         contenedor.grid(row=fila, column=0, padx=14, pady=(0, 18), sticky="ew")
 
-        for columna in range(len(encabezados)):
+        if titulo:
+            ctk.CTkLabel(
+                contenedor,
+                text=titulo,
+                font=("Arial", 11, "bold"),
+                text_color="#9fffe4",
+            ).grid(row=0, column=0, columnspan=len(grupo), padx=10, pady=(8, 2), sticky="w")
+            fila_encabezado = 1
+        else:
+            fila_encabezado = 0
+
+        for columna in range(len(grupo)):
             contenedor.grid_columnconfigure(columna, weight=1)
 
-        for columna, texto in enumerate(encabezados):
+        for columna, texto in enumerate(grupo):
             ctk.CTkLabel(
                 contenedor,
                 text=str(texto),
@@ -7969,21 +8020,24 @@ class App(ctk.CTk):
                 fg_color="#1f2937",
                 corner_radius=6,
                 height=30,
-                width=90,
-            ).grid(row=0, column=columna, padx=3, pady=4, sticky="ew")
+                width=96,
+            ).grid(row=fila_encabezado, column=columna, padx=3, pady=4, sticky="ew")
 
         for indice_fila, fila_datos in enumerate(filas, start=1):
-            for columna, valor in enumerate(fila_datos):
+            color_fila = "#151a22" if indice_fila % 2 else "#101827"
+            for columna, clave in enumerate(grupo):
+                indice_columna = encabezados.index(clave)
+                valor = fila_datos[indice_columna] if indice_columna < len(fila_datos) else ""
                 ctk.CTkLabel(
                     contenedor,
                     text=str(valor),
                     font=("Arial", 12),
                     text_color="#e8edf7",
-                    fg_color="#151a22",
+                    fg_color=color_fila,
                     corner_radius=6,
-                    height=28,
-                    width=90,
-                ).grid(row=indice_fila, column=columna, padx=3, pady=3, sticky="ew")
+                    height=30,
+                    width=96,
+                ).grid(row=fila_encabezado + indice_fila, column=columna, padx=3, pady=3, sticky="ew")
 
     def _render_error(self, prefijo, mensaje):
         frame = getattr(self, prefijo + "_resultado_frame")

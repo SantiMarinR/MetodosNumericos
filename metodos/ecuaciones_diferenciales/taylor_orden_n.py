@@ -58,27 +58,41 @@ class TaylorOrdenN(MetodoNumerico):
         funciones = [None] + [sp.lambdify((x, y), derivadas[k], "math") for k in range(1, orden + 1)]
 
         tabla = []
+        pasos = [
+            "Se calculan derivadas totales usando y'=f(x,y).",
+            "Formula: y_{i+1}=y_i + h*y' + h^2/2!*y'' + ... + h^n/n!*y^(n).",
+            "Cada termino se evalua en (x_i, y_i).",
+        ]
         for i in range(1, pasos_n + 1):
             incremento = 0.0
             fila = {"i": i, "x_i": redondear(x_val), "y_i": redondear(y_val)}
+            terminos_texto = []
             for k in range(1, orden + 1):
                 valor_derivada = float(funciones[k](x_val, y_val))
                 termino = (h ** k / math.factorial(k)) * valor_derivada
                 incremento += termino
                 fila[f"y^{k}"] = redondear(valor_derivada)
                 fila[f"term {k}"] = redondear(termino)
+                terminos_texto.append(
+                    f"h^{k}/{k}!*y^{k} = {redondear(termino)}"
+                )
             y_sig = y_val + incremento
             fila["y_{i+1}"] = redondear(y_sig)
             tabla.append(fila)
+            if i <= 20:
+                pasos.extend([
+                    f"Iteracion {i}: x_i={redondear(x_val)}, y_i={redondear(y_val)}.",
+                    "Terminos: " + "; ".join(terminos_texto) + ".",
+                    f"Incremento = {redondear(incremento)}; y_{i + 1} = {redondear(y_val)} + {redondear(incremento)} = {redondear(y_sig)}.",
+                ])
             x_val, y_val = x_val + h, y_sig
+
+        if pasos_n > 20:
+            pasos.append("Se omiten del procedimiento escrito las iteraciones restantes para no saturar la pantalla; la tabla conserva todos los valores.")
 
         return ResultadoMetodo(
             resultado={"x": redondear(x_val), "y": redondear(y_val)},
             mensaje=f"Aproximacion final por Taylor orden {orden}: y({redondear(x_val)}) = {redondear(y_val)}",
-            pasos=[
-                "Se calculan derivadas totales usando y'=f(x,y).",
-                "Se aplica y_{i+1}=y_i + h*y' + h^2/2!*y'' + ... + h^n/n!*y^(n).",
-                "Cada termino se evalua en (x_i, y_i).",
-            ],
+            pasos=pasos,
             tabla=tabla,
         )

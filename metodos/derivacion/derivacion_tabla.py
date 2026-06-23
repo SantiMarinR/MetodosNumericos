@@ -56,13 +56,13 @@ class DerivacionTabla(MetodoNumerico):
 
         if "adelante" in formula:
             direccion = "adelante"
-        elif "atras" in formula or "atrás" in formula:
+        elif "atras" in formula:
             direccion = "atras"
         else:
             direccion = "central"
 
         try:
-            derivada, usados, formula_txt = self._calcular(xs, ys, indice, h, puntos, direccion)
+            derivada, usados, formula_txt, denominador = self._calcular(xs, ys, indice, h, puntos, direccion)
         except ValueError as error:
             return ResultadoMetodo(None, str(error), [], [])
 
@@ -73,18 +73,27 @@ class DerivacionTabla(MetodoNumerico):
             numerador += coef * yi
         tabla.append(["-", "h", redondear(h), ""])
         tabla.append(["-", "numerador", redondear(numerador), ""])
+        tabla.append(["-", "denominador", redondear(denominador), ""])
         tabla.append(["-", "f'(x)", redondear(derivada), ""])
+
+        sustitucion = " + ".join(
+            f"({coef})*{redondear(yi)}" for _etiqueta, _xi, yi, coef in usados
+        )
+        puntos_usados = ", ".join(
+            f"{etiqueta}=({redondear(xi)}, {redondear(yi)})" for etiqueta, xi, yi, _coef in usados
+        )
 
         pasos = [
             "Se ordena la tabla por x_i y se verifica que el paso h sea constante.",
-            f"Se usa la formula de {puntos} puntos hacia {direccion}: {formula_txt}.",
-            "Se sustituyen los valores y_i de la tabla.",
-            f"f'({redondear(x0)}) ≈ {redondear(derivada)}.",
+            f"Como h = {redondear(h)}, se usa la formula de {puntos} puntos hacia {direccion}: {formula_txt}.",
+            f"Puntos usados: {puntos_usados}.",
+            f"Numerador = {sustitucion} = {redondear(numerador)}.",
+            f"f'({redondear(x0)}) = numerador / denominador = {redondear(numerador)} / {redondear(denominador)} = {redondear(derivada)}.",
         ]
 
         return ResultadoMetodo(
             resultado={"x": redondear(x0), "derivada_aprox": redondear(derivada), "h": redondear(h)},
-            mensaje=f"f'({redondear(x0)}) ≈ {redondear(derivada)} con {puntos} puntos ({direccion}).",
+            mensaje=f"f'({redondear(x0)}) aprox {redondear(derivada)} con {puntos} puntos ({direccion}).",
             pasos=pasos,
             tabla=tabla,
         )
@@ -119,4 +128,4 @@ class DerivacionTabla(MetodoNumerico):
         require(idx)
         usados = [(f"x{j}", xs[j], ys[j], c) for j, c in zip(idx, coefs)]
         derivada = sum(c * ys[j] for j, c in zip(idx, coefs)) / denom
-        return derivada, usados, formula
+        return derivada, usados, formula, denom

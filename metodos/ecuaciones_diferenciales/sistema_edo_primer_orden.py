@@ -54,6 +54,10 @@ class SistemaEcuacionesDiferencialesPrimerOrden(MetodoNumerico):
             return ResultadoMetodo(None, "h debe ser distinto de 0 y n debe ser mayor o igual a 1.", [], [])
 
         tabla = []
+        pasos = [
+            "Se trabaja con el sistema y' = f(x,y,z) y z' = g(x,y,z).",
+            "En cada iteracion se aplican las formulas de Runge-Kutta 4 a las dos ecuaciones al mismo tiempo.",
+        ]
         for i in range(1, n + 1):
             k1y = h * f(x, y, z)
             k1z = h * g(x, y, z)
@@ -69,16 +73,25 @@ class SistemaEcuacionesDiferencialesPrimerOrden(MetodoNumerico):
                 "i": i, "x_i": redondear(x), "y_i": redondear(y), "z_i": redondear(z),
                 "k1y": redondear(k1y), "k2y": redondear(k2y), "k3y": redondear(k3y), "k4y": redondear(k4y),
                 "k1z": redondear(k1z), "k2z": redondear(k2z), "k3z": redondear(k3z), "k4z": redondear(k4z),
-                "y_{i+1}": redondear(y_sig), "z_{i+1}": redondear(z_sig),
+                "x_{i+1}": redondear(x + h), "y_{i+1}": redondear(y_sig), "z_{i+1}": redondear(z_sig),
             })
+            if i <= 20:
+                pasos.extend([
+                    f"Iteracion {i}: x_i={redondear(x)}, y_i={redondear(y)}, z_i={redondear(z)}.",
+                    f"k1y={redondear(k1y)}, k1z={redondear(k1z)} evaluando en ({redondear(x)}, {redondear(y)}, {redondear(z)}).",
+                    f"k2y={redondear(k2y)}, k2z={redondear(k2z)} evaluando en ({redondear(x + h / 2)}, {redondear(y + k1y / 2)}, {redondear(z + k1z / 2)}).",
+                    f"k3y={redondear(k3y)}, k3z={redondear(k3z)} evaluando en ({redondear(x + h / 2)}, {redondear(y + k2y / 2)}, {redondear(z + k2z / 2)}).",
+                    f"k4y={redondear(k4y)}, k4z={redondear(k4z)} evaluando en ({redondear(x + h)}, {redondear(y + k3y)}, {redondear(z + k3z)}).",
+                    f"y_{i + 1}={redondear(y_sig)} y z_{i + 1}={redondear(z_sig)}.",
+                ])
             x, y, z = x + h, y_sig, z_sig
+
+        if n > 20:
+            pasos.append("Se omiten del procedimiento escrito las iteraciones restantes para no saturar la pantalla; la tabla conserva todos los valores.")
 
         return ResultadoMetodo(
             resultado={"x": redondear(x), "y": redondear(y), "z": redondear(z)},
             mensaje=f"Aproximacion final: y({redondear(x)})={redondear(y)}, z({redondear(x)})={redondear(z)}",
-            pasos=[
-                "Se calculan k1, k2, k3 y k4 para cada ecuacion del sistema.",
-                "Se actualizan y y z con el promedio ponderado de Runge-Kutta 4.",
-            ],
+            pasos=pasos,
             tabla=tabla,
         )

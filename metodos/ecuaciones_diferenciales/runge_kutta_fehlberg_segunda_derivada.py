@@ -33,6 +33,11 @@ class RungeKuttaFehlbergSegundaDerivada(MetodoNumerico):
             return ResultadoMetodo(None, "h debe ser distinto de 0 y n debe ser mayor o igual a 1.", [], [])
 
         tabla = []
+        pasos = [
+            "Se transforma y'' = f(t,y,y') en sistema con z = y'.",
+            "Entonces se resuelve y' = z y z' = f(t,y,z) con Fehlberg RKF45.",
+            "Se comparan orden 4 y orden 5 para estimar el error local de y y de z.",
+        ]
         for i in range(1, n + 1):
             def F(tt, yy, zz):
                 return zz, g(tt, yy, zz)
@@ -70,19 +75,29 @@ class RungeKuttaFehlbergSegundaDerivada(MetodoNumerico):
 
             tabla.append({
                 "i": i, "t_i": redondear(t), "y_i": redondear(y), "z_i=y'_i": redondear(z),
+                "t_{i+1}": redondear(t + h),
                 "y orden 4": redondear(y4), "y orden 5": redondear(y5),
                 "z orden 4": redondear(z4), "z orden 5": redondear(z5),
                 "error y": redondear(abs(y5 - y4)), "error z": redondear(abs(z5 - z4)),
             })
+            if i <= 20:
+                error_y = abs(y5 - y4)
+                error_z = abs(z5 - z4)
+                pasos.extend([
+                    f"Iteracion {i}: t_i={redondear(t)}, y_i={redondear(y)}, z_i=y'_i={redondear(z)}.",
+                    f"Orden 4: y4={redondear(y4)}, z4={redondear(z4)}.",
+                    f"Orden 5: y5={redondear(y5)}, z5={redondear(z5)}.",
+                    f"Error y=|{redondear(y5)}-{redondear(y4)}|={redondear(error_y)}; error z=|{redondear(z5)}-{redondear(z4)}|={redondear(error_z)}.",
+                    f"Se avanza con y_{i + 1}={redondear(y5)} y z_{i + 1}=y'_{i + 1}={redondear(z5)}.",
+                ])
             t, y, z = t + h, y5, z5
+
+        if n > 20:
+            pasos.append("Se omiten del procedimiento escrito las iteraciones restantes para no saturar la pantalla; la tabla conserva todos los valores.")
 
         return ResultadoMetodo(
             resultado={"x": redondear(t), "y": redondear(y), "z": redondear(z)},
             mensaje=f"Aproximacion final RKF45: y({redondear(t)})={redondear(y)}, y'({redondear(t)})={redondear(z)}",
-            pasos=[
-                "Se transforma y''=f(t,y,y') en sistema con z=y'.",
-                "Se aplica Fehlberg RKF45 al sistema y se comparan orden 4 y orden 5.",
-                "El error local se estima con las diferencias entre ambos ordenes.",
-            ],
+            pasos=pasos,
             tabla=tabla,
         )
