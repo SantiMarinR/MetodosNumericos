@@ -142,9 +142,8 @@ class DiferenciaDivididaAdelante(MetodoNumerico):
         texto_newton = texto_newton.replace("+ -", "- ")
         return sp.expand(polinomio), texto_newton
 
-    def calcular_detallado(self, funcion, puntos_x, modo="Adelante"):
-        x_symbol, funcion_simbolica, f_math, f_numpy = self.obtener_funciones(funcion)
-
+    def calcular_detallado(self, funcion=None, puntos_x=None, puntos_y=None, modo="Adelante"):
+        x_symbol = sp.symbols("x")
         xs_originales = [self.convertir_numero(valor) for valor in puntos_x]
 
         if len(xs_originales) < 2:
@@ -153,7 +152,16 @@ class DiferenciaDivididaAdelante(MetodoNumerico):
         if len(set(xs_originales)) != len(xs_originales):
             raise ValueError("No se permiten valores x repetidos.")
 
-        ys_originales = [self.evaluar_seguro(f_math, xi) for xi in xs_originales]
+        if puntos_y is None:
+            x_symbol, funcion_simbolica, f_math, f_numpy = self.obtener_funciones(funcion)
+            ys_originales = [self.evaluar_seguro(f_math, xi) for xi in xs_originales]
+            expresion_texto = str(funcion_simbolica)
+        else:
+            ys_originales = [self.convertir_numero(valor) for valor in puntos_y]
+            if len(ys_originales) != len(xs_originales):
+                raise ValueError("La cantidad de valores y debe coincidir con la cantidad de valores x.")
+            f_numpy = None
+            expresion_texto = "Datos capturados manualmente"
 
         modo_normalizado = str(modo).strip().lower()
 
@@ -190,7 +198,8 @@ class DiferenciaDivididaAdelante(MetodoNumerico):
 
         return {
             "modo": modo_usado,
-            "expresion": str(funcion_simbolica),
+            "expresion": expresion_texto,
+            "usa_funcion": f_numpy is not None,
             "puntos_x_originales": xs_originales,
             "puntos_y_originales": ys_originales,
             "puntos_x": xs_ordenados,
@@ -210,9 +219,10 @@ class DiferenciaDivididaAdelante(MetodoNumerico):
     def ejecutar(self, **kwargs):
         funcion = kwargs.get("funcion")
         puntos_x = kwargs.get("puntos_x", [])
+        puntos_y = kwargs.get("puntos_y")
         modo = kwargs.get("modo", "Adelante")
 
-        datos = self.calcular_detallado(funcion=funcion, puntos_x=puntos_x, modo=modo)
+        datos = self.calcular_detallado(funcion=funcion, puntos_x=puntos_x, puntos_y=puntos_y, modo=modo)
 
         tabla = []
         for fila in datos["tabla_visible"]:

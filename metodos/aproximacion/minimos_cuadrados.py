@@ -133,17 +133,30 @@ class MinimosCuadrados(MetodoNumerico):
         ss_tot = sum((ys[i] - y_bar) ** 2 for i in range(n))
         r2 = (1 - ss_res / ss_tot) if ss_tot > 1e-15 else 1.0
 
-        # ---- 5. Tabla de salida (primera fila = encabezados) ----
-        tabla = [["i", "xi", "yi", "y estimado", "residuo (yi - ŷ)"]]
+        # ---- 5. Tabla de salida con potencias, productos y residuos ----
+        encabezados = ["i", "xi", "yi"]
+        encabezados += [f"x^{p}" for p in range(2 * grado + 1)]
+        encabezados += [f"yi*x^{q}" for q in range(grado + 1)]
+        encabezados += ["y estimado", "residuo", "residuo^2"]
+        tabla = [encabezados]
         for i in range(n):
             yhat = predecir(xs[i])
-            tabla.append([
+            residuo = ys[i] - yhat
+            fila = [
                 i,
                 round(xs[i], 6),
                 round(ys[i], 6),
-                round(yhat, 6),
-                round(ys[i] - yhat, 6),
-            ])
+            ]
+            fila += [round(xs[i] ** p, 6) for p in range(2 * grado + 1)]
+            fila += [round(ys[i] * xs[i] ** q, 6) for q in range(grado + 1)]
+            fila += [round(yhat, 6), round(residuo, 6), round(residuo ** 2, 6)]
+            tabla.append(fila)
+
+        fila_sumas = ["Σ", "", round(sum(ys), 6)]
+        fila_sumas += [round(valor, 6) for valor in S]
+        fila_sumas += [round(valor, 6) for valor in T]
+        fila_sumas += ["", "", round(ss_res, 6)]
+        tabla.append(fila_sumas)
 
         # ---- 6. Polinomio en texto y pasos ----
         def termino(k):

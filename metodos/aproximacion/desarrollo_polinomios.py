@@ -4,6 +4,7 @@ import sympy as sp
 
 from core.metodo_base import MetodoNumerico
 from core.resultado import ResultadoMetodo
+from core.funciones import crear_expresion
 
 
 class DesarrolloPolinomios(MetodoNumerico):
@@ -71,9 +72,8 @@ class DesarrolloPolinomios(MetodoNumerico):
             x_eval = None
 
         # ---- 2. Parseo simbólico de la función ----
-        x = sp.symbols("x")
         try:
-            expr = sp.sympify(str(funcion_txt).replace("^", "**"))
+            x, expr = crear_expresion(funcion_txt)
         except (sp.SympifyError, SyntaxError, TypeError):
             return ResultadoMetodo(
                 resultado=None,

@@ -2,6 +2,7 @@ import sympy as sp
 
 from core.metodo_base import MetodoNumerico
 from core.resultado import ResultadoMetodo
+from core.funciones import crear_expresion
 
 
 class DosPuntos(MetodoNumerico):
@@ -70,9 +71,8 @@ class DosPuntos(MetodoNumerico):
             formula = "central"
 
         # ---- 2. Parseo y evaluación de la función ----
-        x = sp.symbols("x")
         try:
-            expr = sp.sympify(str(funcion_txt).replace("^", "**"))
+            x, expr = crear_expresion(funcion_txt)
             f = sp.lambdify(x, expr, modules=["math"])
         except (sp.SympifyError, SyntaxError, TypeError):
             return ResultadoMetodo(

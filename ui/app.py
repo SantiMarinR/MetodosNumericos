@@ -7,6 +7,7 @@ import customtkinter as ctk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 
+from core.funciones import crear_expresion
 from core.registro import obtener_metodos
 
 
@@ -31,6 +32,7 @@ CATEGORIAS_UI = [
             "Secante",
             "Newton",
             "Muller",
+            "Punto fijo",
         ],
     },
     {
@@ -61,6 +63,7 @@ CATEGORIAS_UI = [
             "2 puntos",
             "3 puntos",
             "5 puntos",
+            "Derivación con tabla",
             "Extrapolación en derivación",
         ],
     },
@@ -76,9 +79,20 @@ CATEGORIAS_UI = [
             "Simpson 3/8 compuesto",
             "Legendre simple",
             "Legendre compuesto",
+            "Cuadratura gaussiana",
             "Integral doble por Trapecio",
             "Integral doble por Simpson 1/3",
             "Cuadratura adaptativa",
+        ],
+    },
+    {
+        "titulo": "Ecuaciones diferenciales",
+        "descripcion": "Metodos numericos para EDO de primer orden.",
+        "metodos": [
+            "Runge-Kutta 4",
+            "Sistema de ecuaciones diferenciales ordinarias de primer orden",
+            "Runge-Kutta-Fehlberg",
+            "Taylor de orden n",
         ],
     },
 ]
@@ -462,6 +476,10 @@ class App(ctk.CTk):
             self.mostrar_muller()
             return
 
+        if self.normalizar(nombre_metodo) == self.normalizar("Punto fijo"):
+            self.mostrar_punto_fijo()
+            return
+
         if self.normalizar(nombre_metodo) == self.normalizar("Lagrange"):
             self.mostrar_lagrange()
             return
@@ -510,6 +528,9 @@ class App(ctk.CTk):
         if self.normalizar(nombre_metodo) == self.normalizar("5 puntos"):
             self.mostrar_cinco_puntos()
             return
+        if self.normalizar(nombre_metodo) == self.normalizar("Derivación con tabla"):
+            self.mostrar_derivacion_tabla()
+            return
         if self.normalizar(nombre_metodo) in (
             self.normalizar("Extrapolación en derivación"),
             self.normalizar("Extrapolacion en derivacion"),
@@ -534,6 +555,10 @@ class App(ctk.CTk):
             return
         if self.normalizar(nombre_metodo) == self.normalizar("Desarrollo en polinomios"):
             self.mostrar_desarrollo()
+            return
+
+        if getattr(self.metodo_actual, "categoria", "") == "Ecuaciones diferenciales":
+            self.mostrar_ecuacion_diferencial()
             return
 
         self.mostrar_pantalla_metodo()
@@ -720,7 +745,8 @@ class App(ctk.CTk):
             aviso.grid(row=0, column=0, padx=18, pady=18, sticky="w")
             return
 
-        for i, parametro in enumerate(self.metodo_actual.parametros):
+        fila_actual = 0
+        for parametro in self.metodo_actual.parametros:
             label = ctk.CTkLabel(
                 self.frame_formulario,
                 text=parametro.get("label", parametro.get("nombre", "Parámetro")),
@@ -728,7 +754,8 @@ class App(ctk.CTk):
                 text_color="#f1f5ff",
                 justify="left",
             )
-            label.grid(row=i * 2, column=0, padx=18, pady=(14, 4), sticky="w")
+            label.grid(row=fila_actual, column=0, padx=18, pady=(14, 4), sticky="w")
+            fila_actual += 1
 
             entrada = ctk.CTkEntry(
                 self.frame_formulario,
@@ -740,13 +767,21 @@ class App(ctk.CTk):
                 text_color="#ffffff",
                 font=("Arial", 14),
             )
-            entrada.grid(row=i * 2 + 1, column=0, padx=18, pady=(0, 8), sticky="ew")
+            entrada.grid(row=fila_actual, column=0, padx=18, pady=(0, 8), sticky="ew")
+            fila_actual += 1
 
             self.entradas[parametro["nombre"]] = entrada
 
+            if str(parametro["nombre"]).startswith("funcion"):
+                self.construir_calculadora_simbolos(
+                    self.frame_formulario,
+                    fila_actual,
+                    entrada,
+                )
+                fila_actual += 1
+
     def construir_funcion_numpy_integracion(self, expresion):
-        x = sp.symbols("x")
-        expr = sp.sympify(expresion)
+        x, expr = crear_expresion(expresion)
         return sp.lambdify(x, expr, "numpy")
 
     def mostrar_integracion(self):
@@ -5921,11 +5956,32 @@ class App(ctk.CTk):
 
         self.construir_calculadora_dd(panel_entrada, 4)
 
+        self.crear_label(
+            panel_entrada,
+            "Modo de captura",
+            tamano=13,
+            peso="bold",
+            color="#f1f5ff",
+        ).grid(row=5, column=0, padx=22, pady=(10, 4), sticky="w")
+
+        self.dd_modo_datos = ctk.CTkOptionMenu(
+            panel_entrada,
+            values=["Usar funcion f(x)", "Capturar y_i"],
+            command=lambda _=None: self.actualizar_modo_dd(),
+            fg_color="#0f141b",
+            button_color="#1f6feb",
+            button_hover_color="#1959bd",
+            text_color="#ffffff",
+            font=("Arial", 14),
+        )
+        self.dd_modo_datos.set("Usar funcion f(x)")
+        self.dd_modo_datos.grid(row=6, column=0, padx=22, pady=(0, 8), sticky="ew")
+
         self.dd_modo_fijo = "Adelante"
 
         self.dd_cantidad = self.crear_input_dd(
             panel_entrada,
-            5,
+            7,
             "Cantidad de puntos xᵢ",
             "Ejemplo: 6"
         )
@@ -5939,7 +5995,7 @@ class App(ctk.CTk):
             font=("Arial", 14, "bold"),
             fg_color="#1f6feb",
             hover_color="#1959bd",
-        ).grid(row=7, column=0, padx=22, pady=(10, 12), sticky="ew")
+        ).grid(row=9, column=0, padx=22, pady=(10, 12), sticky="ew")
 
         self.dd_puntos_frame = ctk.CTkScrollableFrame(
             panel_entrada,
@@ -5949,7 +6005,7 @@ class App(ctk.CTk):
             border_color="#2a3342",
             height=180,
         )
-        self.dd_puntos_frame.grid(row=8, column=0, padx=22, pady=(0, 14), sticky="ew")
+        self.dd_puntos_frame.grid(row=10, column=0, padx=22, pady=(0, 14), sticky="ew")
         self.dd_puntos_frame.grid_columnconfigure(0, weight=0)
         self.dd_puntos_frame.grid_columnconfigure(1, weight=1)
         self.dd_puntos_frame.grid_columnconfigure(2, weight=1)
@@ -5963,6 +6019,7 @@ class App(ctk.CTk):
 
         self.dd_x_entries = []
         self.dd_y_labels = []
+        self.dd_y_entries = []
 
         ctk.CTkButton(
             panel_entrada,
@@ -5973,7 +6030,7 @@ class App(ctk.CTk):
             font=("Arial", 15, "bold"),
             fg_color="#159a73",
             hover_color="#0f7a5d",
-        ).grid(row=11, column=0, padx=22, pady=(0, 24), sticky="ew")
+        ).grid(row=12, column=0, padx=22, pady=(0, 24), sticky="ew")
 
         self.crear_label(
             panel_resultado,
@@ -6103,12 +6160,21 @@ class App(ctk.CTk):
         self.dd_funcion.insert(0, texto[:-1])
         self.dd_funcion.focus()
 
+    def actualizar_modo_dd(self):
+        modo = self.dd_modo_datos.get() if hasattr(self, "dd_modo_datos") else "Usar funcion f(x)"
+        if hasattr(self, "dd_funcion"):
+            self.dd_funcion.configure(state="disabled" if modo == "Capturar y_i" else "normal")
+        if hasattr(self, "dd_x_entries") and self.dd_x_entries:
+            self.crear_tabla_x_dd()
+
     def crear_tabla_x_dd(self):
         for widget in self.dd_puntos_frame.winfo_children():
             widget.destroy()
 
         self.dd_x_entries = []
         self.dd_y_labels = []
+        self.dd_y_entries = []
+        capturar_y = hasattr(self, "dd_modo_datos") and self.dd_modo_datos.get() == "Capturar y_i"
 
         try:
             cantidad = int(self.dd_cantidad.get())
@@ -6119,7 +6185,7 @@ class App(ctk.CTk):
             if cantidad > 12:
                 raise ValueError("Para que la tabla se vea bien, usa máximo 12 puntos.")
 
-            encabezados = ["i", "xᵢ", "yᵢ = f(xᵢ)"]
+            encabezados = ["i", "x_i", "y_i" if capturar_y else "y_i = f(x_i)"]
             for columna, texto in enumerate(encabezados):
                 ctk.CTkLabel(
                     self.dd_puntos_frame,
@@ -6155,17 +6221,30 @@ class App(ctk.CTk):
                 entrada.grid(row=i + 1, column=1, padx=4, pady=4, sticky="ew")
                 self.dd_x_entries.append(entrada)
 
-                etiqueta_y = ctk.CTkLabel(
-                    self.dd_puntos_frame,
-                    text="—",
-                    font=("Arial", 12, "bold"),
-                    text_color="#9fffe4",
-                    fg_color="#101216",
-                    corner_radius=6,
-                    height=32,
-                )
-                etiqueta_y.grid(row=i + 1, column=2, padx=4, pady=4, sticky="ew")
-                self.dd_y_labels.append(etiqueta_y)
+                if capturar_y:
+                    entrada_y = ctk.CTkEntry(
+                        self.dd_puntos_frame,
+                        height=32,
+                        corner_radius=8,
+                        fg_color="#0f141b",
+                        border_color="#344054",
+                        text_color="#ffffff",
+                        font=("Arial", 13),
+                    )
+                    entrada_y.grid(row=i + 1, column=2, padx=4, pady=4, sticky="ew")
+                    self.dd_y_entries.append(entrada_y)
+                else:
+                    etiqueta_y = ctk.CTkLabel(
+                        self.dd_puntos_frame,
+                        text="-",
+                        font=("Arial", 12, "bold"),
+                        text_color="#9fffe4",
+                        fg_color="#101216",
+                        corner_radius=6,
+                        height=32,
+                    )
+                    etiqueta_y.grid(row=i + 1, column=2, padx=4, pady=4, sticky="ew")
+                    self.dd_y_labels.append(etiqueta_y)
 
         except Exception as error:
             ctk.CTkLabel(
@@ -6199,15 +6278,19 @@ class App(ctk.CTk):
                 raise ValueError("Primero crea la tabla de xᵢ.")
 
             puntos_x = [entrada.get() for entrada in self.dd_x_entries]
+            capturar_y = hasattr(self, "dd_modo_datos") and self.dd_modo_datos.get() == "Capturar y_i"
+            puntos_y = [entrada.get() for entrada in self.dd_y_entries] if capturar_y else None
 
             datos = self.metodo_actual.calcular_detallado(
                 funcion=self.dd_funcion.get(),
                 puntos_x=puntos_x,
+                puntos_y=puntos_y,
                 modo=self.dd_modo_fijo,
             )
 
-            for etiqueta, yi in zip(self.dd_y_labels, datos["puntos_y_originales"]):
-                etiqueta.configure(text=self.formatear_numero_dd(yi, 6))
+            if not capturar_y:
+                for etiqueta, yi in zip(self.dd_y_labels, datos["puntos_y_originales"]):
+                    etiqueta.configure(text=self.formatear_numero_dd(yi, 6))
 
             self.dibujar_grafica_dd(datos)
             self.mostrar_resultado_dd(datos)
@@ -6220,7 +6303,7 @@ class App(ctk.CTk):
 
         puntos_x = datos["puntos_x_originales"]
         puntos_y = datos["puntos_y_originales"]
-        funcion_numpy = datos["funcion_numpy"]
+        funcion_numpy = datos.get("funcion_numpy")
         polinomio_numpy = datos["polinomio_numpy"]
 
         x_min = min(puntos_x)
@@ -6237,10 +6320,13 @@ class App(ctk.CTk):
         xs = np.linspace(x_inicio, x_final, 900)
 
         with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
-            try:
-                ys_funcion = funcion_numpy(xs)
-            except Exception:
-                ys_funcion = np.array([funcion_numpy(float(valor)) for valor in xs])
+            if funcion_numpy is not None:
+                try:
+                    ys_funcion = funcion_numpy(xs)
+                except Exception:
+                    ys_funcion = np.array([funcion_numpy(float(valor)) for valor in xs])
+            else:
+                ys_funcion = np.full_like(xs, np.nan, dtype=float)
 
             try:
                 ys_polinomio = polinomio_numpy(xs)
@@ -6268,15 +6354,16 @@ class App(ctk.CTk):
             zorder=2,
         )
 
-        eje.plot(
-            xs[mascara_funcion],
-            ys_funcion[mascara_funcion],
-            linewidth=3,
-            linestyle="--",
-            color="#ff4fd8",
-            label="f(x) original",
-            zorder=4,
-        )
+        if funcion_numpy is not None and np.any(mascara_funcion):
+            eje.plot(
+                xs[mascara_funcion],
+                ys_funcion[mascara_funcion],
+                linewidth=3,
+                linestyle="--",
+                color="#ff4fd8",
+                label="f(x) original",
+                zorder=4,
+            )
 
         eje.scatter(
             puntos_x,
@@ -7546,8 +7633,7 @@ class App(ctk.CTk):
     def dibujar_grafica_dos_puntos(self, datos, resultado):
         self.limpiar_grafica_dos_puntos()
 
-        x = sp.symbols("x")
-        expr = sp.sympify(str(datos["funcion"]).replace("^", "**"))
+        x, expr = crear_expresion(datos["funcion"])
         f = sp.lambdify(x, expr, "numpy")
         x0 = float(datos["x"])
         h = float(datos["h"])
@@ -7631,12 +7717,11 @@ class App(ctk.CTk):
         texto = "PROCEDIMIENTO:\n----------------------------------------\n"
         for i, paso in enumerate(resultado.pasos, start=1):
             texto += f"{i}. {paso}\n"
-        if resultado.tabla:
-            texto += "\nTABLA:\n----------------------------------------\n"
-            for fila in resultado.tabla:
-                texto += f"{fila}\n"
         procedimiento.insert("1.0", texto)
         procedimiento.configure(state="disabled")
+
+        if resultado.tabla:
+            self._dibujar_tabla_generica(self.dp_resultado_frame, resultado.tabla, fila=2)
 
     def mostrar_error_dos_puntos(self, mensaje):
         self.limpiar_resultado_dos_puntos()
@@ -7655,23 +7740,24 @@ class App(ctk.CTk):
     # =========================================================
 
     def _func_numpy(self, texto):
-        x = sp.symbols("x")
-        expr = sp.sympify(str(texto).replace("^", "**"))
+        x, expr = crear_expresion(texto)
         return sp.lambdify(x, expr, "numpy")
 
     def _parse_lista_simple(self, texto):
         limpio = str(texto).replace(";", ",").replace(" ", ",")
         return [float(p) for p in limpio.split(",") if p != ""]
 
-    def construir_calculadora_simbolos(self, padre, fila, entry):
+    def construir_calculadora_simbolos(self, padre, fila, entry, variables=None):
         calc = ctk.CTkFrame(
             padre, fg_color="#151a22", corner_radius=14, border_width=1, border_color="#2a3342",
         )
         calc.grid(row=fila, column=0, padx=22, pady=(8, 10), sticky="ew")
         for c in range(4):
             calc.grid_columnconfigure(c, weight=1)
+        variables = variables or ("x",)
+        botones_variables = [(var, var) for var in variables]
         botones = [
-            ("x", "x"), ("sin", "sin("), ("cos", "cos("), ("C", "clear"),
+            *botones_variables, ("sin", "sin("), ("cos", "cos("), ("C", "clear"),
             ("+", "+"), ("-", "-"), ("×", "*"), ("÷", "/"),
             ("x²", "**2"), ("xʸ", "**"), ("eˣ", "exp("), ("ln", "log("),
             ("(", "("), (")", ")"), ("π", "pi"), ("⌫", "back"),
@@ -7835,12 +7921,66 @@ class App(ctk.CTk):
         texto = "PROCEDIMIENTO:\n----------------------------------------\n"
         for i, paso in enumerate(resultado.pasos, start=1):
             texto += f"{i}. {paso}\n"
-        if resultado.tabla:
-            texto += "\nTABLA:\n----------------------------------------\n"
-            for fila in resultado.tabla:
-                texto += f"{fila}\n"
         procedimiento.insert("1.0", texto)
         procedimiento.configure(state="disabled")
+
+        if resultado.tabla:
+            self._dibujar_tabla_generica(frame, resultado.tabla, fila=2)
+
+    def _normalizar_tabla_generica(self, tabla):
+        if not tabla:
+            return [], []
+        if isinstance(tabla[0], dict):
+            encabezados = list(tabla[0].keys())
+            filas = [[fila.get(col, "") for col in encabezados] for fila in tabla]
+            return encabezados, filas
+        if isinstance(tabla[0], (list, tuple)):
+            encabezados = [str(col) for col in tabla[0]]
+            filas = [list(fila) for fila in tabla[1:]]
+            return encabezados, filas
+        return ["Valor"], [[fila] for fila in tabla]
+
+    def _dibujar_tabla_generica(self, padre, tabla_datos, fila=0):
+        encabezados, filas = self._normalizar_tabla_generica(tabla_datos)
+        if not encabezados:
+            return
+
+        contenedor = ctk.CTkFrame(
+            padre,
+            fg_color="#101216",
+            corner_radius=12,
+            border_width=1,
+            border_color="#303846",
+        )
+        contenedor.grid(row=fila, column=0, padx=14, pady=(0, 18), sticky="ew")
+
+        for columna in range(len(encabezados)):
+            contenedor.grid_columnconfigure(columna, weight=1)
+
+        for columna, texto in enumerate(encabezados):
+            ctk.CTkLabel(
+                contenedor,
+                text=str(texto),
+                font=("Arial", 12, "bold"),
+                text_color="#ffffff",
+                fg_color="#1f2937",
+                corner_radius=6,
+                height=30,
+                width=90,
+            ).grid(row=0, column=columna, padx=3, pady=4, sticky="ew")
+
+        for indice_fila, fila_datos in enumerate(filas, start=1):
+            for columna, valor in enumerate(fila_datos):
+                ctk.CTkLabel(
+                    contenedor,
+                    text=str(valor),
+                    font=("Arial", 12),
+                    text_color="#e8edf7",
+                    fg_color="#151a22",
+                    corner_radius=6,
+                    height=28,
+                    width=90,
+                ).grid(row=indice_fila, column=columna, padx=3, pady=3, sticky="ew")
 
     def _render_error(self, prefijo, mensaje):
         frame = getattr(self, prefijo + "_resultado_frame")
@@ -7853,6 +7993,147 @@ class App(ctk.CTk):
             frame, text=mensaje, font=("Arial", 14), text_color="#fca5a5",
             wraplength=620, justify="left",
         ).grid(row=1, column=0, padx=18, pady=(0, 18), sticky="w")
+
+    # ---------- PUNTO FIJO ----------
+    def mostrar_punto_fijo(self):
+        pe = self._layout_doble("pfijo")
+        self.crear_label(pe, "DATOS DE ENTRADA", tamano=11, peso="bold", color="#75b8ff"
+                         ).grid(row=0, column=0, padx=22, pady=(22, 0), sticky="w")
+        self.crear_label(pe, self.metodo_actual.descripcion, tamano=14, color="#cbd5e1"
+                         ).grid(row=1, column=0, padx=22, pady=(4, 12), sticky="w")
+        self.pfijo_funcion = self.crear_input_deriv(pe, 2, "Función g(x)", "Ejemplo: cos(x)")
+        self.construir_calculadora_simbolos(pe, 4, self.pfijo_funcion)
+        self.pfijo_p0 = self.crear_input_deriv(pe, 5, "Valor inicial P0", "Ejemplo: 0.5")
+        self.pfijo_tol = self.crear_input_deriv(pe, 7, "Error máximo permitido", "Ejemplo: 1e-5")
+        self.pfijo_max = self.crear_input_deriv(pe, 9, "Máximo de iteraciones (opcional)", "Se calcula automáticamente")
+        ctk.CTkButton(pe, text="Calcular punto fijo", command=self.calcular_punto_fijo,
+                      height=44, corner_radius=10, font=("Arial", 15, "bold"),
+                      fg_color="#159a73", hover_color="#0f7a5d"
+                      ).grid(row=11, column=0, padx=22, pady=(4, 24), sticky="ew")
+
+    def calcular_punto_fijo(self):
+        try:
+            datos_entrada = {
+                "funcion": self.pfijo_funcion.get(),
+                "p0": self.pfijo_p0.get(),
+                "tolerancia": self.pfijo_tol.get(),
+                "max_iteraciones": self.pfijo_max.get(),
+            }
+            datos = self.metodo_actual.calcular_detallado(**datos_entrada)
+            resultado = self.metodo_actual.ejecutar(**datos_entrada)
+            self._dibujar_punto_fijo(datos)
+            self._render_resultado("pfijo", resultado)
+        except Exception as e:
+            self._render_error("pfijo", str(e))
+
+    def _dibujar_punto_fijo(self, datos):
+        tabla = datos.get("tabla", [])
+        p0 = float(datos.get("p0_inicial", 0.0))
+        raiz = float(datos.get("raiz", p0))
+        valores = [p0, raiz]
+        for fila in tabla:
+            valores.append(float(fila["p_anterior"]))
+            valores.append(float(fila["g_p_anterior"]))
+        x_min = min(valores)
+        x_max = max(valores)
+        ancho = (x_max - x_min) or 1.0
+        xs = np.linspace(x_min - 0.35 * ancho, x_max + 0.35 * ancho, 700)
+
+        g = datos["funcion_numpy"]
+        with np.errstate(all="ignore"):
+            try:
+                ys = np.asarray(g(xs), dtype=float)
+            except Exception:
+                ys = np.array([float(g(float(xv))) for xv in xs], dtype=float)
+        mask = np.isfinite(ys)
+
+        figura, eje = self._fig_oscura()
+        eje.plot(xs[mask], ys[mask], linewidth=2, color="#7cc7ff", label="g(x)")
+        eje.plot(xs, xs, linewidth=2, linestyle="--", color="#ff4fd8", label="y = x")
+
+        for fila in tabla[:60]:
+            pi = float(fila["p_anterior"])
+            gi = float(fila["g_p_anterior"])
+            eje.plot([pi, pi], [pi, gi], color="#f28c28", linewidth=1.2, alpha=0.75)
+            eje.plot([pi, gi], [gi, gi], color="#f28c28", linewidth=1.2, alpha=0.75)
+
+        eje.scatter([p0], [p0], color="#facc15", s=80, label="P0", zorder=6)
+        eje.scatter([raiz], [raiz], color="#22c55e", s=90, label="Punto fijo", zorder=7)
+        self._estilo_eje(figura, eje, "Iteración de punto fijo", "x", "y")
+        self._montar_canvas("pfijo", figura)
+
+    # ---------- ECUACIONES DIFERENCIALES ----------
+    def mostrar_ecuacion_diferencial(self):
+        pe = self._layout_doble("edo")
+        self.crear_label(pe, "DATOS DE ENTRADA", tamano=11, peso="bold", color="#75b8ff"
+                         ).grid(row=0, column=0, padx=22, pady=(22, 0), sticky="w")
+        self.crear_label(pe, self.metodo_actual.descripcion, tamano=14, color="#cbd5e1"
+                         ).grid(row=1, column=0, padx=22, pady=(4, 12), sticky="w")
+        self.edo_entradas = {}
+        nombres_parametros = [p.get("nombre") for p in self.metodo_actual.parametros]
+        variables_funcion = ("x", "y", "z") if "funcion_z" in nombres_parametros else ("x", "y")
+        fila = 2
+        for parametro in self.metodo_actual.parametros:
+            entrada = self.crear_input_deriv(
+                pe,
+                fila,
+                parametro.get("label", parametro.get("nombre", "")),
+                parametro.get("placeholder", ""),
+            )
+            self.edo_entradas[parametro["nombre"]] = entrada
+            fila += 2
+            if str(parametro["nombre"]).startswith("funcion"):
+                self.construir_calculadora_simbolos(pe, fila, entrada, variables=variables_funcion)
+                fila += 1
+
+        ctk.CTkButton(pe, text="Calcular y graficar", command=self.calcular_ecuacion_diferencial,
+                      height=44, corner_radius=10, font=("Arial", 15, "bold"),
+                      fg_color="#159a73", hover_color="#0f7a5d"
+                      ).grid(row=fila, column=0, padx=22, pady=(8, 24), sticky="ew")
+
+    def calcular_ecuacion_diferencial(self):
+        try:
+            datos = {nombre: entrada.get() for nombre, entrada in self.edo_entradas.items()}
+            resultado = self.metodo_actual.ejecutar(**datos)
+            if resultado.resultado is None:
+                self._render_error("edo", resultado.mensaje)
+                return
+            self._dibujar_ecuacion_diferencial(resultado)
+            self._render_resultado("edo", resultado)
+        except Exception as e:
+            self._render_error("edo", str(e))
+
+    def _dibujar_ecuacion_diferencial(self, resultado):
+        tabla = resultado.tabla or []
+        xs = []
+        ys = []
+        zs = []
+        for fila in tabla:
+            if isinstance(fila, dict):
+                if "x_i" in fila and "y_i" in fila:
+                    xs.append(float(fila["x_i"]))
+                    ys.append(float(fila["y_i"]))
+                if "z_i" in fila:
+                    zs.append(float(fila["z_i"]))
+
+        if isinstance(resultado.resultado, dict):
+            if "x" in resultado.resultado and "y" in resultado.resultado:
+                xs.append(float(resultado.resultado["x"]))
+                ys.append(float(resultado.resultado["y"]))
+            if "z" in resultado.resultado:
+                zs.append(float(resultado.resultado["z"]))
+
+        figura, eje = self._fig_oscura()
+        if xs and ys:
+            eje.plot(xs, ys, color="#7cc7ff", linewidth=2.5, marker="o", markersize=4, label="y(x)")
+        if xs and zs and len(zs) == len(xs):
+            eje.plot(xs, zs, color="#f28c28", linewidth=2, marker="s", markersize=4, label="z(x)")
+        self._estilo_eje(figura, eje, "Solución aproximada", "x", "valor")
+        self._montar_canvas("edo", figura)
+
+        if xs and ys and zs and len(zs) == len(ys):
+            # La gráfica principal queda y,z contra x; el retrato fase va en el resultado como texto/tabla.
+            pass
 
     # ---- dibujantes reutilizables ----
     def _dibujar_tangente(self, prefijo, datos, resultado):
@@ -8009,6 +8290,123 @@ class App(ctk.CTk):
         except Exception as e:
             self._render_error("cp", str(e))
 
+    # ---------- DERIVACIÓN CON TABLA ----------
+    def mostrar_derivacion_tabla(self):
+        pe = self._layout_doble("dt")
+        self.crear_label(pe, "DATOS DE ENTRADA", tamano=11, peso="bold", color="#75b8ff"
+                         ).grid(row=0, column=0, padx=22, pady=(22, 0), sticky="w")
+        self.crear_label(pe, self.metodo_actual.descripcion, tamano=14, color="#cbd5e1"
+                         ).grid(row=1, column=0, padx=22, pady=(4, 12), sticky="w")
+        self.dt_cantidad = self.crear_input_deriv(pe, 2, "Cantidad de puntos en la tabla", "Ejemplo: 5")
+        ctk.CTkButton(pe, text="Crear tabla x_i, y_i", command=self.crear_tabla_derivacion,
+                      height=40, corner_radius=10, font=("Arial", 14, "bold"),
+                      fg_color="#1f6feb", hover_color="#1959bd"
+                      ).grid(row=4, column=0, padx=22, pady=(8, 12), sticky="ew")
+        self.dt_puntos_frame = ctk.CTkScrollableFrame(
+            pe, fg_color="#151a22", corner_radius=12,
+            border_width=1, border_color="#2a3342", height=200,
+        )
+        self.dt_puntos_frame.grid(row=5, column=0, padx=22, pady=(0, 14), sticky="ew")
+        for c in range(3):
+            self.dt_puntos_frame.grid_columnconfigure(c, weight=1)
+        self.crear_label(self.dt_puntos_frame, "Crea la tabla y llena x_i, y_i.", tamano=13, color="#cbd5e1"
+                         ).grid(row=0, column=0, columnspan=3, padx=12, pady=12, sticky="w")
+        self.dt_x_entries = []
+        self.dt_y_entries = []
+        self.dt_x = self.crear_input_deriv(pe, 6, "Punto x donde derivar (debe estar en la tabla)", "Ejemplo: 2.0")
+        self.crear_label(pe, "Fórmula", tamano=13, peso="bold", color="#f1f5ff"
+                         ).grid(row=8, column=0, padx=22, pady=(10, 4), sticky="w")
+        self.dt_formula = ctk.CTkOptionMenu(
+            pe,
+            values=[
+                "2 central", "2 adelante", "2 atras",
+                "3 central", "3 adelante", "3 atras",
+                "5 central", "5 adelante", "5 atras",
+            ],
+            fg_color="#0f141b", button_color="#1f6feb", button_hover_color="#1959bd",
+            text_color="#ffffff", font=("Arial", 14),
+        )
+        self.dt_formula.set("5 central")
+        self.dt_formula.grid(row=9, column=0, padx=22, pady=(0, 12), sticky="ew")
+        ctk.CTkButton(pe, text="Calcular f'(x)", command=self.calcular_derivacion_tabla,
+                      height=44, corner_radius=10, font=("Arial", 15, "bold"),
+                      fg_color="#159a73", hover_color="#0f7a5d"
+                      ).grid(row=10, column=0, padx=22, pady=(4, 24), sticky="ew")
+
+    def crear_tabla_derivacion(self):
+        for widget in self.dt_puntos_frame.winfo_children():
+            widget.destroy()
+        self.dt_x_entries = []
+        self.dt_y_entries = []
+        try:
+            cantidad = int(float(self.dt_cantidad.get()))
+            if cantidad < 2:
+                raise ValueError("Necesitas al menos 2 puntos.")
+            if cantidad > 20:
+                raise ValueError("Para que la tabla se vea bien, usa máximo 20 puntos.")
+            encabezados = ["i", "x_i", "y_i"]
+            for c, texto in enumerate(encabezados):
+                ctk.CTkLabel(
+                    self.dt_puntos_frame, text=texto, font=("Arial", 12, "bold"),
+                    text_color="#ffffff", fg_color="#1f2937", corner_radius=6, height=28,
+                ).grid(row=0, column=c, padx=4, pady=6, sticky="ew")
+            for i in range(cantidad):
+                ctk.CTkLabel(
+                    self.dt_puntos_frame, text=str(i), font=("Arial", 12, "bold"),
+                    text_color="#ffffff", fg_color="#101216", corner_radius=6, height=32,
+                ).grid(row=i + 1, column=0, padx=4, pady=4, sticky="ew")
+                ex = ctk.CTkEntry(self.dt_puntos_frame, height=32, corner_radius=8,
+                                  fg_color="#0f141b", border_color="#344054",
+                                  text_color="#ffffff", font=("Arial", 13))
+                ey = ctk.CTkEntry(self.dt_puntos_frame, height=32, corner_radius=8,
+                                  fg_color="#0f141b", border_color="#344054",
+                                  text_color="#ffffff", font=("Arial", 13))
+                ex.grid(row=i + 1, column=1, padx=4, pady=4, sticky="ew")
+                ey.grid(row=i + 1, column=2, padx=4, pady=4, sticky="ew")
+                self.dt_x_entries.append(ex)
+                self.dt_y_entries.append(ey)
+        except Exception as error:
+            ctk.CTkLabel(
+                self.dt_puntos_frame, text=f"Error: {error}", font=("Arial", 13, "bold"),
+                text_color="#fca5a5", wraplength=520, justify="left",
+            ).grid(row=0, column=0, padx=12, pady=12, sticky="w")
+
+    def calcular_derivacion_tabla(self):
+        try:
+            if not self.dt_x_entries:
+                raise ValueError("Primero crea la tabla.")
+            xs = [entrada.get() for entrada in self.dt_x_entries]
+            ys = [entrada.get() for entrada in self.dt_y_entries]
+            datos = {
+                "xs": ", ".join(xs),
+                "ys": ", ".join(ys),
+                "x": self.dt_x.get(),
+                "formula": self.dt_formula.get(),
+            }
+            r = self.metodo_actual.ejecutar(**datos)
+            if r.resultado is None:
+                self._render_error("dt", r.mensaje); return
+            self._dibujar_derivacion_tabla(datos, r)
+            self._render_resultado("dt", r)
+        except Exception as e:
+            self._render_error("dt", str(e))
+
+    def _dibujar_derivacion_tabla(self, datos, resultado):
+        xs = np.array(self._parse_lista_simple(datos["xs"]), dtype=float)
+        ys = np.array(self._parse_lista_simple(datos["ys"]), dtype=float)
+        x0 = float(datos["x"])
+        m = float(resultado.resultado["derivada_aprox"])
+        idx = int(np.argmin(np.abs(xs - x0)))
+        y0 = float(ys[idx])
+        ancho = (float(np.max(xs)) - float(np.min(xs))) or 1.0
+        xc = np.linspace(float(np.min(xs)) - 0.15 * ancho, float(np.max(xs)) + 0.15 * ancho, 400)
+        figura, eje = self._fig_oscura()
+        eje.plot(xs, ys, color="#7cc7ff", linewidth=2, marker="o", label="Datos")
+        eje.plot(xc, y0 + m * (xc - x0), color="#f28c28", linewidth=2, label="Recta con pendiente aprox.")
+        eje.scatter([x0], [y0], color="#22c55e", s=90, label="Punto derivado", zorder=6)
+        self._estilo_eje(figura, eje, "Derivación desde tabla", "x", "y")
+        self._montar_canvas("dt", figura)
+
     # ---------- EXTRAPOLACIÓN EN DERIVACIÓN ----------
     def mostrar_extrapolacion_deriv(self):
         pe = self._layout_doble("ex")
@@ -8047,17 +8445,49 @@ class App(ctk.CTk):
                          ).grid(row=0, column=0, padx=22, pady=(22, 0), sticky="w")
         self.crear_label(pe, self.metodo_actual.descripcion, tamano=14, color="#cbd5e1"
                          ).grid(row=1, column=0, padx=22, pady=(4, 12), sticky="w")
-        self.mc_xs = self.crear_input_deriv(pe, 2, "Valores de x (separados por coma)", "0, 1, 2, 3, 4")
-        self.mc_ys = self.crear_input_deriv(pe, 4, "Valores de y (separados por coma)", "1.1, 2.9, 5.2, 6.8, 9.1")
-        self.mc_grado = self.crear_input_deriv(pe, 6, "Grado del polinomio (1 = recta)", "1")
+        self.crear_label(pe, "Modo de datos", tamano=13, peso="bold", color="#f1f5ff"
+                         ).grid(row=2, column=0, padx=22, pady=(10, 4), sticky="w")
+        self.mc_modo = ctk.CTkOptionMenu(
+            pe,
+            values=["Capturar x,y", "Usar funcion f(x)"],
+            command=lambda _=None: self.actualizar_modo_minimos(),
+            fg_color="#0f141b", button_color="#1f6feb", button_hover_color="#1959bd",
+            text_color="#ffffff", font=("Arial", 14),
+        )
+        self.mc_modo.set("Capturar x,y")
+        self.mc_modo.grid(row=3, column=0, padx=22, pady=(0, 8), sticky="ew")
+        self.mc_funcion = self.crear_input_deriv(pe, 4, "Función f(x)", "Ejemplo: x**2 + 1")
+        self.construir_calculadora_simbolos(pe, 6, self.mc_funcion)
+        self.mc_xs = self.crear_input_deriv(pe, 7, "Valores de x (separados por coma)", "0, 1, 2, 3, 4")
+        self.mc_ys = self.crear_input_deriv(pe, 9, "Valores de y (separados por coma)", "1.1, 2.9, 5.2, 6.8, 9.1")
+        self.mc_grado = self.crear_input_deriv(pe, 11, "Grado del polinomio (1 = recta)", "1")
+        self.actualizar_modo_minimos()
         ctk.CTkButton(pe, text="Ajustar y graficar", command=self.calcular_minimos,
                       height=44, corner_radius=10, font=("Arial", 15, "bold"),
                       fg_color="#159a73", hover_color="#0f7a5d"
-                      ).grid(row=8, column=0, padx=22, pady=(4, 24), sticky="ew")
+                      ).grid(row=13, column=0, padx=22, pady=(4, 24), sticky="ew")
+
+    def actualizar_modo_minimos(self):
+        if not hasattr(self, "mc_modo"):
+            return
+        usa_funcion = self.mc_modo.get() == "Usar funcion f(x)"
+        self.mc_funcion.configure(state="normal" if usa_funcion else "disabled")
+        self.mc_ys.configure(state="disabled" if usa_funcion else "normal")
 
     def calcular_minimos(self):
         try:
-            datos = {"xs": self.mc_xs.get(), "ys": self.mc_ys.get(), "grado": self.mc_grado.get()}
+            xs_texto = self.mc_xs.get()
+            ys_texto = self.mc_ys.get()
+            if self.mc_modo.get() == "Usar funcion f(x)":
+                xs = self._parse_lista_simple(xs_texto)
+                f = self._func_numpy(self.mc_funcion.get())
+                ys = [float(f(xi)) for xi in xs]
+                ys_texto = ", ".join(str(round(yi, 10)) for yi in ys)
+                self.mc_ys.configure(state="normal")
+                self.mc_ys.delete(0, "end")
+                self.mc_ys.insert(0, ys_texto)
+                self.mc_ys.configure(state="disabled")
+            datos = {"xs": xs_texto, "ys": ys_texto, "grado": self.mc_grado.get()}
             r = self.metodo_actual.ejecutar(**datos)
             if r.resultado is None:
                 self._render_error("mc", r.mensaje); return

@@ -3,6 +3,7 @@ import traceback
 
 from core.metodo_base import MetodoNumerico
 from core.resultado import ResultadoMetodo
+from core.funciones import crear_expresion
 
 class TresPuntos(MetodoNumerico):
     nombre = "Derivación por 3 puntos"
@@ -59,11 +60,14 @@ class TresPuntos(MetodoNumerico):
             x = sp.symbols("x")
 
             # ---- Función ----
-            expr = sp.sympify(funcion_txt.replace("^", "**"))
+            x, expr = crear_expresion(funcion_txt)
             f = sp.lambdify(x, expr, "math")
 
             # ---- Fórmula seleccionada ----
             if formula == "adelante":
+                desplazamientos = [0, 1, 2]
+                coefs = [-3, 4, -1]
+                etiquetas = ["x", "x + h", "x + 2h"]
                 derivada = (
                     -3 * f(punto)
                     + 4 * f(punto + h)
@@ -71,6 +75,9 @@ class TresPuntos(MetodoNumerico):
                 ) / (2 * h)
 
             elif formula == "atras":
+                desplazamientos = [0, -1, -2]
+                coefs = [3, -4, 1]
+                etiquetas = ["x", "x - h", "x - 2h"]
                 derivada = (
                     3 * f(punto)
                     - 4 * f(punto - h)
@@ -79,6 +86,9 @@ class TresPuntos(MetodoNumerico):
 
             else:
                 formula = "central"
+                desplazamientos = [-1, 1]
+                coefs = [-1, 1]
+                etiquetas = ["x - h", "x + h"]
                 derivada = (
                     f(punto + h)
                     - f(punto - h)
@@ -93,16 +103,14 @@ class TresPuntos(MetodoNumerico):
 
             error_abs = abs(derivada_exacta - derivada)
 
-            tabla = [
-                ["Concepto", "Valor"],
-                ["Función", funcion_txt],
-                ["x", punto],
-                ["h", h],
-                ["Fórmula", formula],
-                ["Derivada aproximada", round(derivada, 10)],
-                ["Derivada exacta", round(derivada_exacta, 10)],
-                ["Error absoluto", error_abs]
-            ]
+            tabla = [["punto", "coef", "valor de x", "f(x)", "coef*f(x)"]]
+            for etiqueta, coef, desplazamiento in zip(etiquetas, coefs, desplazamientos):
+                xi = punto + desplazamiento * h
+                fxi = f(xi)
+                tabla.append([etiqueta, coef, round(xi, 8), round(fxi, 8), round(coef * fxi, 8)])
+            tabla.append(["-", "", "f'(x) aproximada", round(derivada, 10), ""])
+            tabla.append(["-", "", "f'(x) exacta", round(derivada_exacta, 10), ""])
+            tabla.append(["-", "", "error absoluto", round(error_abs, 12), ""])
 
             pasos = [
                 f"Función ingresada: {funcion_txt}",
