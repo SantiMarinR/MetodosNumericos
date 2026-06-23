@@ -29,10 +29,10 @@ class TaylorOrdenN(MetodoNumerico):
         expresion = re.sub(r"(\d)(y)", r"\1*\2", expresion)
         expresion = re.sub(rf"(y)({funciones})", r"\1*\2", expresion)
         expresion = re.sub(r"(y)(\()", r"\1*\2", expresion)
-        expresion = re.sub(r"(x)(y)", r"\1*\2", expresion)
-        expresion = re.sub(r"(y)(x)", r"\1*\2", expresion)
+        expresion = re.sub(r"(x|t)(y)", r"\1*\2", expresion)
+        expresion = re.sub(r"(y)(x|t)", r"\1*\2", expresion)
         expr = sp.sympify(expresion, locals={
-            "x": x, "y": y, "sin": sp.sin, "cos": sp.cos, "tan": sp.tan,
+            "x": x, "t": x, "T": x, "y": y, "sin": sp.sin, "cos": sp.cos, "tan": sp.tan,
             "log": sp.log, "ln": sp.log, "exp": sp.exp, "sqrt": sp.sqrt,
             "pi": sp.pi, "e": sp.E,
         })

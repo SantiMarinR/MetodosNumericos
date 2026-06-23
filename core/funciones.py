@@ -11,18 +11,19 @@ def preparar_expresion(expresion):
     expresion = expresion.replace(" ", "")
     expresion = expresion.replace("^", "**")
     expresion = expresion.replace("X", "x")
+    expresion = expresion.replace("T", "t")
     expresion = expresion.replace("sen", "sin")
     expresion = expresion.replace("ln", "log")
 
     funciones = "sin|cos|tan|log|exp|sqrt"
-    expresion = re.sub(r"(\d)(x)", r"\1*\2", expresion)
+    expresion = re.sub(r"(\d)(x|t)", r"\1*\2", expresion)
     expresion = re.sub(r"(\d)(\()", r"\1*\2", expresion)
     expresion = re.sub(rf"(\d)({funciones})", r"\1*\2", expresion)
-    expresion = re.sub(rf"(x)({funciones})", r"\1*\2", expresion)
-    expresion = re.sub(r"(x)(\()", r"\1*\2", expresion)
+    expresion = re.sub(rf"(?<![A-Za-z])(x|t)({funciones})", r"\1*\2", expresion)
+    expresion = re.sub(r"(?<![A-Za-z])(x|t)(\()", r"\1*\2", expresion)
     expresion = re.sub(r"(\))(\()", r"\1*\2", expresion)
-    expresion = re.sub(rf"(\))({funciones}|x)", r"\1*\2", expresion)
-    expresion = re.sub(r"(pi)(x)", r"\1*\2", expresion)
+    expresion = re.sub(rf"(\))({funciones}|x|t)", r"\1*\2", expresion)
+    expresion = re.sub(r"(pi)(x|t)", r"\1*\2", expresion)
     return expresion
 
 
@@ -31,6 +32,8 @@ def crear_expresion(expresion, variable="x"):
     locales = {
         variable: simbolo,
         variable.upper(): simbolo,
+        "t": simbolo,
+        "T": simbolo,
         "sin": sp.sin,
         "cos": sp.cos,
         "tan": sp.tan,
@@ -58,10 +61,10 @@ def crear_funcion_2_variables(expresion):
     expresion = re.sub(r"(\d)(y)", r"\1*\2", expresion)
     expresion = re.sub(rf"(y)({funciones})", r"\1*\2", expresion)
     expresion = re.sub(r"(y)(\()", r"\1*\2", expresion)
-    expresion = re.sub(r"(x)(y)", r"\1*\2", expresion)
-    expresion = re.sub(r"(y)(x)", r"\1*\2", expresion)
+    expresion = re.sub(r"(x|t)(y)", r"\1*\2", expresion)
+    expresion = re.sub(r"(y)(x|t)", r"\1*\2", expresion)
     funcion_simbolica = sp.sympify(expresion, locals={
-        "x": x, "y": y, "sin": sp.sin, "cos": sp.cos, "tan": sp.tan,
+        "x": x, "t": x, "T": x, "y": y, "sin": sp.sin, "cos": sp.cos, "tan": sp.tan,
         "log": sp.log, "ln": sp.log, "exp": sp.exp, "sqrt": sp.sqrt,
         "pi": sp.pi, "e": sp.E,
     })

@@ -87,11 +87,13 @@ CATEGORIAS_UI = [
     },
     {
         "titulo": "Ecuaciones diferenciales",
-        "descripcion": "Metodos numericos para EDO de primer orden.",
+        "descripcion": "Metodos numericos para EDO de primer y segundo orden.",
         "metodos": [
             "Runge-Kutta 4",
+            "Runge-Kutta 4 segunda derivada",
             "Sistema de ecuaciones diferenciales ordinarias de primer orden",
             "Runge-Kutta-Fehlberg",
+            "Runge-Kutta-Fehlberg segunda derivada",
             "Taylor de orden n",
         ],
     },
@@ -196,13 +198,14 @@ class App(ctk.CTk):
             self.grid_rowconfigure(indice, weight=0)
             self.grid_columnconfigure(indice, weight=0)
 
-    def crear_label(self, padre, texto, tamano=14, peso="normal", color="#e8edf7"):
+    def crear_label(self, padre, texto, tamano=14, peso="normal", color="#e8edf7", wraplength=620):
         return ctk.CTkLabel(
             padre,
             text=texto,
             font=("Arial", tamano, peso),
             text_color=color,
             justify="left",
+            wraplength=wraplength,
         )
 
 
@@ -8071,7 +8074,7 @@ class App(ctk.CTk):
                          ).grid(row=1, column=0, padx=22, pady=(4, 12), sticky="w")
         self.edo_entradas = {}
         nombres_parametros = [p.get("nombre") for p in self.metodo_actual.parametros]
-        variables_funcion = ("x", "y", "z") if "funcion_z" in nombres_parametros else ("x", "y")
+        variables_funcion = ("t", "y", "z") if "funcion_z" in nombres_parametros else ("t", "y")
         fila = 2
         for parametro in self.metodo_actual.parametros:
             entrada = self.crear_input_deriv(
@@ -8110,11 +8113,13 @@ class App(ctk.CTk):
         zs = []
         for fila in tabla:
             if isinstance(fila, dict):
-                if "x_i" in fila and "y_i" in fila:
-                    xs.append(float(fila["x_i"]))
+                variable_independiente = fila.get("x_i", fila.get("t_i"))
+                if variable_independiente is not None and "y_i" in fila:
+                    xs.append(float(variable_independiente))
                     ys.append(float(fila["y_i"]))
-                if "z_i" in fila:
-                    zs.append(float(fila["z_i"]))
+                z_valor = fila.get("z_i", fila.get("z_i=y'_i"))
+                if z_valor is not None:
+                    zs.append(float(z_valor))
 
         if isinstance(resultado.resultado, dict):
             if "x" in resultado.resultado and "y" in resultado.resultado:
@@ -8125,10 +8130,10 @@ class App(ctk.CTk):
 
         figura, eje = self._fig_oscura()
         if xs and ys:
-            eje.plot(xs, ys, color="#7cc7ff", linewidth=2.5, marker="o", markersize=4, label="y(x)")
+            eje.plot(xs, ys, color="#7cc7ff", linewidth=2.5, marker="o", markersize=4, label="y(t)")
         if xs and zs and len(zs) == len(xs):
-            eje.plot(xs, zs, color="#f28c28", linewidth=2, marker="s", markersize=4, label="z(x)")
-        self._estilo_eje(figura, eje, "Solución aproximada", "x", "valor")
+            eje.plot(xs, zs, color="#f28c28", linewidth=2, marker="s", markersize=4, label="z(t)=y'(t)")
+        self._estilo_eje(figura, eje, "Solución aproximada", "t / x", "valor")
         self._montar_canvas("edo", figura)
 
         if xs and ys and zs and len(zs) == len(ys):

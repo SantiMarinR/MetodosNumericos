@@ -15,11 +15,11 @@ def crear_funcion_3_variables(expresion):
         expresion = re.sub(rf"(\d)({var})", r"\1*\2", expresion)
         expresion = re.sub(rf"({var})({funciones})", r"\1*\2", expresion)
         expresion = re.sub(rf"({var})(\()", r"\1*\2", expresion)
-    expresion = re.sub(r"(x)(y|z)", r"\1*\2", expresion)
-    expresion = re.sub(r"(y)(x|z)", r"\1*\2", expresion)
-    expresion = re.sub(r"(z)(x|y)", r"\1*\2", expresion)
+    expresion = re.sub(r"(x|t)(y|z)", r"\1*\2", expresion)
+    expresion = re.sub(r"(y)(x|t|z)", r"\1*\2", expresion)
+    expresion = re.sub(r"(z)(x|t|y)", r"\1*\2", expresion)
     expr = sp.sympify(expresion, locals={
-        "x": x, "y": y, "z": z, "sin": sp.sin, "cos": sp.cos, "tan": sp.tan,
+        "x": x, "t": x, "T": x, "y": y, "z": z, "sin": sp.sin, "cos": sp.cos, "tan": sp.tan,
         "log": sp.log, "ln": sp.log, "exp": sp.exp, "sqrt": sp.sqrt,
         "pi": sp.pi, "e": sp.E,
     })
